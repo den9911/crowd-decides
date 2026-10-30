@@ -95,6 +95,10 @@ test('all community workflows persist and enforce their invariants',async t=>{
     assert.equal((await alice('/api/polls',{title:'?',options:['x','X']})).status,400);
     assert.equal((await alice('/api/polls',{title:'?',options:['x']})).status,400);
     assert.equal((await alice('/api/poll?id=missing')).status,404);
+    assert.equal((await bob('/api/poll/close',{id:pollId})).status,403);
+    const closed=await alice('/api/poll/close',{id:pollId});assert.equal(closed.body.closed,true);assert.equal(closed.body.isOwner,true);
+    const visible=await bob(`/api/poll?id=${pollId}`);assert.equal(visible.body.closed,true);assert.equal(visible.body.isOwner,false);assert.equal(visible.body.counts[0].count,1);
+    assert.equal((await alice('/api/poll/vote',{id:pollId,choice:1})).status,409);
   });
   await t.test('rooms: isolated ownership, shared gallery, conflict detection',async()=>{
     const pixels='a'.repeat(256);const created=await alice('/api/rooms',{name:'Мой дом',pixels});assert.equal(created.status,200);roomId=created.body.id;assert.equal(created.body.version,1);

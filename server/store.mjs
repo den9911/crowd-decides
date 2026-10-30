@@ -49,6 +49,8 @@ export function openStore(filename) {
       UPDATE uploads_usage SET bytes=bytes-OLD.bytes WHERE id=1;
     END;
   `);
+  // Preserve existing polls when adding the close state.
+  if (!db.prepare('PRAGMA table_info(polls)').all().some(column => column.name === 'closed')) db.exec('ALTER TABLE polls ADD COLUMN closed INTEGER NOT NULL DEFAULT 0');
   const insert = db.prepare('INSERT OR IGNORE INTO posts(id,kind,title,body,category,owner,status,created) VALUES (?,?,?,?,?,?,?,?)');
   seedMemes.forEach(([title, body, color], i) => insert.run(`seed-${i}`, 'arena', title, body, color, 'editor', 'approved', i));
   return db;

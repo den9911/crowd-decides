@@ -85,11 +85,11 @@ export async function createApp(options = {}) {
   }
   function pollResult(id,sid) {
     text(id,50);
-    const poll=db.prepare('SELECT id,title,options FROM polls WHERE id=?').get(id);
+    const poll=db.prepare('SELECT id,title,options,owner,closed FROM polls WHERE id=?').get(id);
     if (!poll) throw new HttpError(404,'Опрос не найден.');
     const counts=db.prepare('SELECT choice,COUNT(*) AS count FROM votes WHERE scope=? AND target=? GROUP BY choice').all('poll',id);
     const own=db.prepare('SELECT choice FROM votes WHERE scope=? AND target=? AND voter=?').get('poll',id,sid);
-    return {...poll,options:JSON.parse(poll.options),counts,choice:own?.choice ?? null};
+    return {id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,choice:own?.choice ?? null,closed:!!poll.closed,isOwner:poll.owner===sid};
   }
   function checkAdmin(req) {
     if (!adminToken) throw new HttpError(503,'Модерация не настроена: задайте ADMIN_TOKEN на сервере.');
@@ -211,8 +211,11 @@ export async function createApp(options = {}) {
         }
         if (path==='/api/poll' && method==='GET') return json(res,pollResult(url.searchParams.get('id'),sid));
         if (path==='/api/poll/vote' && method==='POST') {
-          const poll=pollResult(input.id,sid);integer(input.choice,0,poll.options.length-1);
-          once('poll',input.id,sid,input.choice);return json(res,pollResult(input.id,sid));
+          transaction(db,()=>{const poll=pollResult(input.id,sid);if(poll.closed)throw new HttpError(409,'Опрос завершён.');integer(input.choice,0,poll.options.length-1);once('poll',input.id,sid,input.choice);});return json(res,pollResult(input.id,sid));
+        }
+        if (path==='/api/poll/close' && method==='POST') {
+          const poll=pollResult(input.id,sid);if(!poll.isOwner)throw new HttpError(403,'Только создатель может завершить опрос.');
+          db.prepare('UPDATE polls SET closed=1 WHERE id=? AND owner=?').run(input.id,sid);return json(res,pollResult(input.id,sid));
         }
         if (path==='/api/rooms' && method==='GET') {
           const page=Math.min(10000,Math.max(0,Math.floor(Number(url.searchParams.get('page'))||0)));

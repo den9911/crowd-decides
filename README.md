@@ -25,6 +25,7 @@ Create a quick poll and let your friends decide together.
 - Two to six distinct choices
 - Unguessable links for sharing
 - Shared results and browser-local recent polls
+- The creator can close voting from the same browser; results remain visible
 
 **Try the flow: Ask → share → vote → decide.**
 
