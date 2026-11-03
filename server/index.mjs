@@ -1,3 +1,4 @@
+import {checkStartup} from './startup.mjs';
 import { createServer } from 'node:http';
 import { randomUUID, randomBytes, createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
@@ -209,6 +210,11 @@ export async function createApp(options = {}) {
           const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created) VALUES(?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now());
           return json(res,{id},201);
         }
+        if (path==='/api/poll/template' && method==='GET') {
+          const poll=pollResult(url.searchParams.get('id'),sid);
+          if(!poll.isOwner)throw new HttpError(403,'Только создатель может копировать опрос.');
+          return json(res,{title:poll.title,options:poll.options});
+        }
         if (path==='/api/poll' && method==='GET') return json(res,pollResult(url.searchParams.get('id'),sid));
         if (path==='/api/poll/vote' && method==='POST') {
           transaction(db,()=>{const poll=pollResult(input.id,sid);if(poll.closed)throw new HttpError(409,'Опрос завершён.');integer(input.choice,0,poll.options.length-1);once('poll',input.id,sid,input.choice);});return json(res,pollResult(input.id,sid));
@@ -322,10 +328,18 @@ export async function createApp(options = {}) {
 }
 
 if (process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
-  const {server}=await createApp();
   const portFlag=process.argv.indexOf('--port'),hostFlag=process.argv.indexOf('--host');
   const port=Number(portFlag>=0?process.argv[portFlag+1]:process.env.PORT??3000);
   const host=hostFlag>=0?process.argv[hostFlag+1]:process.env.HOST??'127.0.0.1';
-  server.listen(port,host,()=>console.log(`Minute Club listening on ${JSON.stringify(server.address())}`));
-  for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>server.close(()=>process.exit(0)));
+  try{
+    if(typeof host!=='string'||!host.trim())throw new Error('Provide a HOST or --host value / Укажите HOST');
+    const checked=await checkStartup({port,host});
+    if(process.argv.includes('--check'))console.log(`Startup checks passed / Проверки запуска пройдены: ${JSON.stringify(checked)}`);
+    else{
+      const {server}=await createApp();
+      server.on('error',()=>{console.error('Cannot start server; check local address and permissions / Не удалось запустить сервер');process.exitCode=1;server.close();});
+      server.listen(port,host,()=>console.log(`Minute Club listening on ${JSON.stringify(server.address())}`));
+      for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(()=>process.exit(0)));
+    }
+  }catch(error){console.error(error.message??'Startup failed / Ошибка запуска');process.exitCode=1;}
 }

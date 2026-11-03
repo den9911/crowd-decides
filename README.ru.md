@@ -72,3 +72,12 @@ npm run check
 ---
 
 [Другие проекты den9911](https://github.com/den9911) · [Сообщить о проблеме](https://github.com/den9911/crowd-decides/issues) · [LICENSE](LICENSE)
+
+
+## Recent improvements / Последние улучшения
+
+Creators can open Create a similar poll to prepare an editable draft with only the title and options. Votes, closure and ownership secrets are not copied. A new poll is published only on explicit submission; the template endpoint checks the creator’s current session.
+
+Создатель может подготовить похожий опрос: только заголовок и варианты, без голосов и закрытия. Новый опрос публикуется отдельным действием; права проверяются сервером по сессии.
+
+Startup diagnostics / Проверка запуска: `node server/index.mjs --check` checks the local address, configuration and writable data location without creating a database or starting the API. To use another port: `--port 3005`. No tokens are printed. / База и сервер при проверке не создаются; секреты не выводятся.
