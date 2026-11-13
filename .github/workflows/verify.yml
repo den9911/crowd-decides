@@ -25,3 +25,16 @@ jobs:
         run: npm test
       - name: Check syntax, local links and asset budgets
         run: npm run check
+
+  session-portability:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tests/session-ownership.test.mjs

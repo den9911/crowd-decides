@@ -1,7 +1,8 @@
+import {loadSessionKey} from './session-key.mjs';
 import {checkStartup} from './startup.mjs';
 import { createServer } from 'node:http';
-import { randomUUID, randomBytes, createHmac, timingSafeEqual, createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { randomUUID, createHmac, timingSafeEqual, createHash } from 'node:crypto';
+import { mkdir, readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
 import { promisify } from 'node:util';
@@ -20,15 +21,7 @@ const postFields = 'id,kind,title,body,category,day,status,votes,created,CASE WH
 export async function createApp(options = {}) {
   const dataDir = resolve(options.dataDir ?? process.env.DATA_DIR ?? './data');
   await mkdir(dataDir, { recursive:true, mode:0o700 });
-  let secret = options.secret;
-  if (!secret) {
-    try { secret = await readFile(resolve(dataDir,'session-key'),'utf8'); }
-    catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-      secret = randomBytes(32).toString('hex');
-      await writeFile(resolve(dataDir,'session-key'),secret,{mode:0o600,flag:'wx'});
-    }
-  }
+  const secret=await loadSessionKey(dataDir,options.secret);
   const db = openStore(resolve(dataDir,'minute.sqlite'));
   const appId=options.appId ?? process.env.APP_ID ?? primaryApp;
   if (appId && ![...apps.map(a=>a[0]),'mischief'].includes(appId)) throw new Error('Unknown APP_ID');
