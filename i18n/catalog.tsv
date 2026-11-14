@@ -498,3 +498,12 @@ Cookies и черновики|Cookies and drafts
 Это новый черновик. Голоса и закрытие исходного опроса не переносятся.|This is a new draft. Votes and the original closed state are not copied.
 Только создатель может копировать опрос.|Only the creator can copy this poll.
 Создать похожий|Create a similar poll
+
+Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.|This list stays in your browser. A recent link does not prove ownership.
+Доступ создателя|Creator access
+Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.|You manage this poll through this browser session. Keep its site data.
+Вы просматриваете опрос. Управлять им может только создатель.|You can view this poll; only the creator can manage it.
+Как сохранить доступ создателя?|How do I keep creator access?
+Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.|To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.
+Управление недоступно в этой сессии. Откройте опрос в исходном браузере создателя.|This session cannot manage the poll. Open it in the creator’s original browser.
+Только исходная сессия создателя может управлять опросом.|Only the creator’s original session can manage the poll.

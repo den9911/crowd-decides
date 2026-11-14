@@ -85,6 +85,10 @@ export async function createApp(options = {}) {
     const own=db.prepare('SELECT choice FROM votes WHERE scope=? AND target=? AND voter=?').get('poll',id,sid);
     return {id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,choice:own?.choice ?? null,closed:!!poll.closed,isOwner:poll.owner===sid};
   }
+  function ownerRequired() {
+    const error=new HttpError(403,'Только исходная сессия создателя может управлять опросом.');
+    error.code='OWNER_SESSION_REQUIRED';return error;
+  }
   function checkAdmin(req) {
     if (!adminToken) throw new HttpError(503,'Модерация не настроена: задайте ADMIN_TOKEN на сервере.');
     const token=req.headers.authorization?.replace(/^Bearer /,'') ?? '';
@@ -205,7 +209,7 @@ export async function createApp(options = {}) {
         }
         if (path==='/api/poll/template' && method==='GET') {
           const poll=pollResult(url.searchParams.get('id'),sid);
-          if(!poll.isOwner)throw new HttpError(403,'Только создатель может копировать опрос.');
+          if(!poll.isOwner)throw ownerRequired();
           return json(res,{title:poll.title,options:poll.options});
         }
         if (path==='/api/poll' && method==='GET') return json(res,pollResult(url.searchParams.get('id'),sid));
@@ -213,7 +217,7 @@ export async function createApp(options = {}) {
           transaction(db,()=>{const poll=pollResult(input.id,sid);if(poll.closed)throw new HttpError(409,'Опрос завершён.');integer(input.choice,0,poll.options.length-1);once('poll',input.id,sid,input.choice);});return json(res,pollResult(input.id,sid));
         }
         if (path==='/api/poll/close' && method==='POST') {
-          const poll=pollResult(input.id,sid);if(!poll.isOwner)throw new HttpError(403,'Только создатель может завершить опрос.');
+          const poll=pollResult(input.id,sid);if(!poll.isOwner)throw ownerRequired();
           db.prepare('UPDATE polls SET closed=1 WHERE id=? AND owner=?').run(input.id,sid);return json(res,pollResult(input.id,sid));
         }
         if (path==='/api/rooms' && method==='GET') {
@@ -312,7 +316,7 @@ export async function createApp(options = {}) {
       if (res.headersSent) return res.end();
       const status=error.status ?? (error.code==='ENOENT' || error.code==='ENOTDIR' ? 404:500);
       if (status===500) console.error(error);
-      json(res,{error:status===500?'Что-то пошло не так. Попробуйте ещё раз.':status===404?'Не найдено.':error.message},status);
+      json(res,{...(error.code==='OWNER_SESSION_REQUIRED'?{code:'OWNER_SESSION_REQUIRED'}:{}),error:status===500?'Что-то пошло не так. Попробуйте ещё раз.':status===404?'Не найдено.':error.message},status);
     }
   });
   server.requestTimeout=15000; server.headersTimeout=10000; server.maxHeadersCount=60;

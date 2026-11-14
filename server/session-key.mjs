@@ -1,7 +1,13 @@
 import {randomBytes,randomUUID} from 'node:crypto';
 import {open,link,unlink,stat} from 'node:fs/promises';
 import {join} from 'node:path';
-const failure=()=>new Error('Session key is missing or invalid; restore the original key with the database. No replacement was generated.');
+export class SessionKeyError extends Error {
+ constructor(){
+  super('SESSION_KEY_UNAVAILABLE: Session key is missing, invalid or inaccessible; restore the original key with the database and check directory permissions. Existing keys are never replaced. / Восстановите исходный ключ вместе с базой и проверьте права каталога.');
+  this.name='SessionKeyError';this.code='SESSION_KEY_UNAVAILABLE';
+ }
+}
+const failure=()=>new SessionKeyError();
 async function readKey(path){
  let handle;
  try{
@@ -12,21 +18,35 @@ async function readKey(path){
   if(!/^[a-f0-9]{64}$/.test(value))throw failure();return value;
  }finally{await handle?.close();}
 }
-/** Publish a fully written key without replacing a competing initializer's key. */
-export async function loadSessionKey(dataDir,managed){
- if(managed!==undefined){
-  if(typeof managed!=='string'||Buffer.byteLength(managed)<32||Buffer.byteLength(managed)>128)throw failure();
-  return managed; // Explicit managed mode: operator must supply the same secret on every start.
- }
+function validateManaged(managed){
+ if(typeof managed!=='string'||Buffer.byteLength(managed)<32||Buffer.byteLength(managed)>128)throw failure();
+ return managed;
+}
+async function existingKey(dataDir){
  const target=join(dataDir,'session-key');
  try{return await readKey(target);}catch(error){if(error.code!=='ENOENT')throw error;}
  let existingDatabase=false;
  try{await stat(join(dataDir,'minute.sqlite'));existingDatabase=true;}catch(error){if(error.code!=='ENOENT')throw error;}
  if(existingDatabase){try{return await readKey(target);}catch{throw failure();}}
+ return null;
+}
+/** Read-only startup diagnosis; never generates, repairs or prints a key. */
+export async function inspectSessionKey(dataDir){
+ try{return await existingKey(dataDir)===null?'fresh':'persisted';}catch{throw failure();}
+}
+/** Publish a fully written key without replacing a competing initializer's key. */
+export async function loadSessionKey(dataDir,managed){
+ try{
+ if(managed!==undefined)return validateManaged(managed);
+ const existing=await existingKey(dataDir);if(existing!==null)return existing;
+ const target=join(dataDir,'session-key');
  const temporary=join(dataDir,`.session-key-${randomUUID()}.tmp`);let handle;
  try{
   handle=await open(temporary,'wx',0o600);await handle.writeFile(randomBytes(32).toString('hex'));await handle.sync();await handle.close();handle=null;
   try{await link(temporary,target);}catch(error){if(error.code!=='EEXIST')throw error;}
   return await readKey(target);
- }finally{await handle?.close();await unlink(temporary).catch(error=>{if(error.code!=='ENOENT')throw error;});}
+ }finally{
+  try{await handle?.close();}finally{await unlink(temporary).catch(error=>{if(error.code!=='ENOENT')throw error;});}
+ }
+ }catch{throw failure();}
 }
