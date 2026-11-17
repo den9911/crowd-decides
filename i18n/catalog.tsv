@@ -507,3 +507,13 @@ Cookies и черновики|Cookies and drafts
 Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.|To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.
 Управление недоступно в этой сессии. Откройте опрос в исходном браузере создателя.|This session cannot manage the poll. Open it in the creator’s original browser.
 Только исходная сессия создателя может управлять опросом.|Only the creator’s original session can manage the poll.
+
+Создание ещё не подтверждено. Повторите отправку: будет использован тот же запрос. Не очищайте данные браузера.|Creation is unconfirmed. Submit again to retry the same request. Keep your browser data.
+Браузер не разрешил сохранить запрос. Разрешите хранилище сессии перед отправкой.|The browser could not save the request. Allow session storage before submitting.
+Создание связано с исходной сессией браузера. Откройте исходный профиль; новая копия не создана.|Creation belongs to the original browser session. Open that profile; no new copy was created.
+Состояние перечитано с сервера. Проверьте, завершён ли опрос.|The server state was refreshed. Check whether the poll is closed.
+Результат завершения не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.|Closing is unconfirmed. Use Refresh to check the state. The request is not sent again automatically.
+Некорректный идентификатор создания.|Invalid creation request identifier.
+Этот идентификатор уже использован для другого опроса. Повторите исходный запрос.|This identifier was used for a different poll. Retry the original request.
+
+Сохранённый запрос недоступен. Проверьте недавние опросы в исходном браузере перед новым созданием.|The saved request is unavailable. Review recent polls in the original browser before creating another.

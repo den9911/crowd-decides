@@ -199,13 +199,25 @@ export async function createApp(options = {}) {
           db.prepare('INSERT OR IGNORE INTO reports(post,reporter,reason) VALUES(?,?,?)').run(id,sid,reason);return json(res,{ok:true});
         }
         if (path==='/api/polls' && method==='POST') {
-          throttle(req,'publish',8);
           const title=text(input.title,160);
           if (!Array.isArray(input.options) || input.options.length<2 || input.options.length>6) throw new HttpError(400,'Добавьте от 2 до 6 вариантов.');
           const choices=input.options.map(v=>text(v,80));
           if (new Set(choices.map(v=>v.toLowerCase())).size!==choices.length) throw new HttpError(400,'Варианты должны различаться.');
-          const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created) VALUES(?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now());
-          return json(res,{id},201);
+          const requestId=input.requestId??null;
+          if(requestId!==null&&(typeof requestId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(requestId)))throw new HttpError(400,'Некорректный идентификатор создания.');
+          const hash=createHash('sha256').update(JSON.stringify([title,choices])).digest('hex');
+          const result=transaction(db,()=>{
+            const previous=requestId===null?null:db.prepare('SELECT id,owner,request_hash FROM polls WHERE request_id=?').get(requestId);
+            if(previous){
+              if(previous.owner!==sid)throw ownerRequired();
+              if(previous.request_hash!==hash){const error=new HttpError(409,'Этот идентификатор уже использован для другого опроса. Повторите исходный запрос.');error.code='POLL_REQUEST_CONFLICT';throw error;}
+              return {id:previous.id,replayed:true};
+            }
+            throttle(req,'publish',8);
+            const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created,request_id,request_hash) VALUES(?,?,?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now(),requestId,requestId===null?null:hash);
+            return {id,replayed:false};
+          });
+          return json(res,{id:result.id},result.replayed?200:201);
         }
         if (path==='/api/poll/template' && method==='GET') {
           const poll=pollResult(url.searchParams.get('id'),sid);
@@ -313,10 +325,11 @@ export async function createApp(options = {}) {
       if (compressed) res.setHeader('Content-Encoding','gzip');
       res.writeHead(200,{'Content-Type':type,'Content-Length':bytes.length});res.end(req.method==='HEAD'?undefined:bytes);
     } catch (error) {
+      if(req.aborted||res.destroyed)return;
       if (res.headersSent) return res.end();
       const status=error.status ?? (error.code==='ENOENT' || error.code==='ENOTDIR' ? 404:500);
       if (status===500) console.error(error);
-      json(res,{...(error.code==='OWNER_SESSION_REQUIRED'?{code:'OWNER_SESSION_REQUIRED'}:{}),error:status===500?'Что-то пошло не так. Попробуйте ещё раз.':status===404?'Не найдено.':error.message},status);
+      json(res,{...(['OWNER_SESSION_REQUIRED','POLL_REQUEST_CONFLICT'].includes(error.code)?{code:error.code}:{}),error:status===500?'Что-то пошло не так. Попробуйте ещё раз.':status===404?'Не найдено.':error.message},status);
     }
   });
   server.requestTimeout=15000; server.headersTimeout=10000; server.maxHeadersCount=60;

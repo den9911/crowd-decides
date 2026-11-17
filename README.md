@@ -84,3 +84,5 @@ Fresh initialization writes and syncs a private temporary key, then publishes it
 При отсутствии или повреждении session-key восстановите исходный ключ из согласованной резервной копии. Удаление ключа не сбрасывает пароль и не возвращает потерянную cookie. Публичная информация об опросе не содержит owner secret. Сервер не восстанавливает права на основании ID опроса.
 
 Creator access belongs to the original browser session, not the share link or the recent-polls list. Keep its cookies and site data. If that session is lost, the app explains the limitation; it cannot recover ownership. Viewing and voting in open polls remain available.
+
+Poll creation now retries the same saved request after a lost response, keeping one poll. An unconfirmed Close action refreshes server state before offering another action. Keep the original browser session and its pending request; clients that omit `requestId` retain the legacy create behavior.

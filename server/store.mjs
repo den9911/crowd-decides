@@ -51,6 +51,10 @@ export function openStore(filename) {
   `);
   // Preserve existing polls when adding the close state.
   if (!db.prepare('PRAGMA table_info(polls)').all().some(column => column.name === 'closed')) db.exec('ALTER TABLE polls ADD COLUMN closed INTEGER NOT NULL DEFAULT 0');
+  const columns=db.prepare('PRAGMA table_info(polls)').all().map(column=>column.name);
+  if(!columns.includes('request_id'))db.exec('ALTER TABLE polls ADD COLUMN request_id TEXT');
+  if(!columns.includes('request_hash'))db.exec('ALTER TABLE polls ADD COLUMN request_hash TEXT');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS polls_request ON polls(request_id) WHERE request_id IS NOT NULL');
   const insert = db.prepare('INSERT OR IGNORE INTO posts(id,kind,title,body,category,owner,status,created) VALUES (?,?,?,?,?,?,?,?)');
   seedMemes.forEach(([title, body, color], i) => insert.run(`seed-${i}`, 'arena', title, body, color, 'editor', 'approved', i));
   return db;

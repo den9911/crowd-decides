@@ -10,11 +10,11 @@ export function toast(message) {
   const status=$('#status');status.textContent=message;status.hidden=false;
   clearTimeout(toast.timer);toast.timer=setTimeout(()=>{status.hidden=true;},6000);
 }
-export async function api(path, input, headers = {}) {
-  const response = await fetch(path,{method:input===undefined?'GET':'POST',headers:{...(input===undefined?{}:{'Content-Type':'application/json'}),...headers},...(input===undefined?{}:{body:JSON.stringify(input)})});
+export async function api(path, input, headers = {}, options = {}) {
+  const response = await fetch(path,{signal:options.signal,method:input===undefined?'GET':'POST',headers:{...(input===undefined?{}:{'Content-Type':'application/json'}),...headers},...(input===undefined?{}:{body:JSON.stringify(input)})});
   const result=await response.json();
   const {localizeResponse,localizeError}=await import('./editorial.js');
-  if (!response.ok) {const error=new Error(localizeError(result.error??'The request could not be completed.'));error.status=response.status;if(result.code==='OWNER_SESSION_REQUIRED')error.code=result.code;throw error;}
+  if (!response.ok) {const error=new Error(localizeError(result.error??'The request could not be completed.'));error.status=response.status;if(['OWNER_SESSION_REQUIRED','POLL_REQUEST_CONFLICT'].includes(result.code))error.code=result.code;throw error;}
   return localizeResponse(path,result);
 }
 export function action(element, handler, event='click') {
