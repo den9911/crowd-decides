@@ -517,3 +517,8 @@ Cookies и черновики|Cookies and drafts
 Этот идентификатор уже использован для другого опроса. Повторите исходный запрос.|This identifier was used for a different poll. Retry the original request.
 
 Сохранённый запрос недоступен. Проверьте недавние опросы в исходном браузере перед новым созданием.|The saved request is unavailable. Review recent polls in the original browser before creating another.
+
+Состояние голоса перечитано с сервера. Проверьте свой ответ и результат.|The server vote state was refreshed. Check your answer and the result.
+Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.|Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.
+
+Повторить тот же запрос|Retry the same request

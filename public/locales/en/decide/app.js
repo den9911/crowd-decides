@@ -3,6 +3,7 @@ const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function feedback(message){
  let note=$('#poll-feedback');if(!note){note=document.createElement('p');note.id='poll-feedback';note.className='note';note.setAttribute('role','status');$('#app').prepend(note);}note.textContent=message;
+ const retry=$('#create-poll button[type=submit]');if(retry&&retry.dataset.lock!=='true'){retry.textContent='Retry the same request';$('#create-poll').setAttribute('aria-describedby','poll-feedback');}
 }
 export async function mount(){
   const id=new URLSearchParams(location.search).get('poll');
@@ -28,7 +29,7 @@ export async function mount(){
     let result;
     try{result=await boundedApi('/api/polls',pending);}
     catch(error){
-      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;form.elements.title.readOnly=false;form.elements.options.readOnly=false;throw error;}
+      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;form.elements.title.readOnly=false;form.elements.options.readOnly=false;$('#poll-feedback')?.remove();form.removeAttribute('aria-describedby');$('button[type=submit]',form).textContent='Create poll ↗';throw error;}
       if(error.code==='POLL_REQUEST_CONFLICT'){feedback('This identifier was used for a different poll. Retry the original request.');return;}
       feedback(error.code==='OWNER_SESSION_REQUIRED'?'Creation belongs to the original browser session. Open that profile; no new copy was created.':'Creation is unconfirmed. Submit again to retry the same request. Keep your browser data.');return;
     }
@@ -39,7 +40,15 @@ async function showPoll(id){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const counts=poll.options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0),total=counts.reduce((a,b)=>a+b,0);
   $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'POLL CLOSED':'A DECISION IS IN THE MAKING'}</p><h2 class="poll-title">${escape(poll.title)}</h2>${poll.choice===null&&!poll.closed?`<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div><p class="small muted">${total} votes. Vote to see the results.</p>`:`<div>${poll.options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${poll.choice===String(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Total votes: ${total}. ${poll.choice!==null?'Your vote is counted.':'This poll is closed.'}</p>`}<aside id="ownership-notice" class="note" aria-label="Creator access">${poll.isOwner?'You manage this poll through this browser session. Keep its site data.':'You can view this poll; only the creator can manage it.'}<details><summary>How do I keep creator access?</summary><p>To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.</p></details></aside><div class="row"><button id="share">Send to friends ↗</button><button id="refresh" class="secondary">Refresh</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Close poll</button>':''}${poll.isOwner?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">Create a similar poll</a>`:''}<a class="text-button" href="/decide/">Create your own</a></div></div>`;
-  $$('.poll-option').forEach(button=>action(button,async()=>{await api('/api/poll/vote',{id,choice:Number(button.dataset.index)});await showPoll(id);}));
+  $$('.poll-option').forEach(button=>action(button,async()=>{
+    // One pending choice: do not offer a competing vote while its result is unknown.
+    $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});
+    try{await boundedApi('/api/poll/vote',{id,choice:Number(button.dataset.index)});await showPoll(id);}
+    catch{
+      try{await showPoll(id);feedback('The server vote state was refreshed. Check your answer and the result.');}
+      catch{feedback('Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.');}
+    }
+  }));
   action($('#share'),()=>share(location.href,'Crowd Decides',poll.title));action($('#refresh'),()=>showPoll(id));
   if($('#close'))action($('#close'),async()=>{
     try{await boundedApi('/api/poll/close',{id});await showPoll(id);}

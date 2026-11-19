@@ -86,3 +86,5 @@ Fresh initialization writes and syncs a private temporary key, then publishes it
 Creator access belongs to the original browser session, not the share link or the recent-polls list. Keep its cookies and site data. If that session is lost, the app explains the limitation; it cannot recover ownership. Viewing and voting in open polls remain available.
 
 Poll creation now retries the same saved request after a lost response, keeping one poll. An unconfirmed Close action refreshes server state before offering another action. Keep the original browser session and its pending request; clients that omit `requestId` retain the legacy create behavior.
+
+After an interrupted creation, **Retry the same request** preserves the saved intent. Lost vote replies are checked against server state; choices stay locked if that check is unavailable. Closing and voting follow database commit order, and repeating Close does not rewrite an already closed poll.

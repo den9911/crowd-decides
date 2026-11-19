@@ -3,6 +3,7 @@ const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function feedback(message){
  let note=$('#poll-feedback');if(!note){note=document.createElement('p');note.id='poll-feedback';note.className='note';note.setAttribute('role','status');$('#app').prepend(note);}note.textContent=message;
+ const retry=$('#create-poll button[type=submit]');if(retry&&retry.dataset.lock!=='true'){retry.textContent='Повторить тот же запрос';$('#create-poll').setAttribute('aria-describedby','poll-feedback');}
 }
 export async function mount(){
   const id=new URLSearchParams(location.search).get('poll');
@@ -28,7 +29,7 @@ export async function mount(){
     let result;
     try{result=await boundedApi('/api/polls',pending);}
     catch(error){
-      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;form.elements.title.readOnly=false;form.elements.options.readOnly=false;throw error;}
+      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;form.elements.title.readOnly=false;form.elements.options.readOnly=false;$('#poll-feedback')?.remove();form.removeAttribute('aria-describedby');$('button[type=submit]',form).textContent='Создать голосование ↗';throw error;}
       if(error.code==='POLL_REQUEST_CONFLICT'){feedback('Этот идентификатор уже использован для другого опроса. Повторите исходный запрос.');return;}
       feedback(error.code==='OWNER_SESSION_REQUIRED'?'Создание связано с исходной сессией браузера. Откройте исходный профиль; новая копия не создана.':'Создание ещё не подтверждено. Повторите отправку: будет использован тот же запрос. Не очищайте данные браузера.');return;
     }
@@ -39,7 +40,15 @@ async function showPoll(id){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const counts=poll.options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0),total=counts.reduce((a,b)=>a+b,0);
   $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'ОПРОС ЗАВЕРШЁН':'РЕШЕНИЕ ПРИНИМАЕТСЯ'}</p><h2 class="poll-title">${escape(poll.title)}</h2>${poll.choice===null&&!poll.closed?`<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div><p class="small muted">${total} голосов. Результат откроется после твоего ответа.</p>`:`<div>${poll.options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${poll.choice===String(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Всего голосов: ${total}. ${poll.choice!==null?'Твой ответ учтён.':'Опрос завершён.'}</p>`}<aside id="ownership-notice" class="note" aria-label="Доступ создателя">${poll.isOwner?'Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.':'Вы просматриваете опрос. Управлять им может только создатель.'}<details><summary>Как сохранить доступ создателя?</summary><p>Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.</p></details></aside><div class="row"><button id="share">Отправить друзьям ↗</button><button id="refresh" class="secondary">Обновить</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Завершить опрос</button>':''}${poll.isOwner?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">Создать похожий</a>`:''}<a class="text-button" href="/decide/">Создать свой</a></div></div>`;
-  $$('.poll-option').forEach(button=>action(button,async()=>{await api('/api/poll/vote',{id,choice:Number(button.dataset.index)});await showPoll(id);}));
+  $$('.poll-option').forEach(button=>action(button,async()=>{
+    // One pending choice: do not offer a competing vote while its result is unknown.
+    $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});
+    try{await boundedApi('/api/poll/vote',{id,choice:Number(button.dataset.index)});await showPoll(id);}
+    catch{
+      try{await showPoll(id);feedback('Состояние голоса перечитано с сервера. Проверьте свой ответ и результат.');}
+      catch{feedback('Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
+    }
+  }));
   action($('#share'),()=>share(location.href,'Решайте',poll.title));action($('#refresh'),()=>showPoll(id));
   if($('#close'))action($('#close'),async()=>{
     try{await boundedApi('/api/poll/close',{id});await showPoll(id);}

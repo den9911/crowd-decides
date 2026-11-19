@@ -19,3 +19,11 @@ test('legacy poll migration preserves the original row and is safe to reopen',as
  const old=new DatabaseSync(join(dir,'minute.sqlite'));old.exec("CREATE TABLE polls(id TEXT PRIMARY KEY,title TEXT NOT NULL,options TEXT NOT NULL,owner TEXT NOT NULL,created INTEGER NOT NULL); INSERT INTO polls VALUES('legacy','Original','[\"A\",\"B\"]','old-owner',123)");old.close();await writeFile(join(dir,'session-key'),'a'.repeat(64));
  for(let i=0;i<2;i++){const app=await createApp({dataDir:dir});assert.deepEqual({...app.db.prepare('SELECT * FROM polls').get()},{id:'legacy',title:'Original',options:'["A","B"]',owner:'old-owner',created:123,closed:0,request_id:null,request_hash:null});app.db.close();}
 });
+
+test('a rejected creation leaves no receipt across restart, then one valid retry succeeds',async t=>{
+ const h=await fixture(t);await h.start();const session=await h.request({title:'Existing',options:['A','B']});const input={requestId:randomUUID(),title:'Deferred',options:['A','B']};
+ h.db.exec("CREATE TRIGGER block_creation BEFORE INSERT ON polls WHEN NEW.title='Deferred' BEGIN SELECT RAISE(ABORT,'creation write refused'); END");
+ const old=console.error;console.error=()=>{};try{assert.equal((await h.request(input,session.cookie)).status,500);}finally{console.error=old;}
+ assert.equal(h.db.prepare('SELECT COUNT(*) n FROM polls WHERE request_id=?').get(input.requestId).n,0);h.db.exec('DROP TRIGGER block_creation');await h.start();
+ assert.equal(h.db.prepare('SELECT COUNT(*) n FROM polls WHERE request_id=?').get(input.requestId).n,0);const success=await h.request(input,session.cookie);assert.equal(success.status,201);assert.deepEqual((await h.request(input,session.cookie)).body,success.body);assert.equal(h.db.prepare('SELECT COUNT(*) n FROM polls').get().n,2);
+});

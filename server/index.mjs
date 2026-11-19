@@ -229,8 +229,13 @@ export async function createApp(options = {}) {
           transaction(db,()=>{const poll=pollResult(input.id,sid);if(poll.closed)throw new HttpError(409,'Опрос завершён.');integer(input.choice,0,poll.options.length-1);once('poll',input.id,sid,input.choice);});return json(res,pollResult(input.id,sid));
         }
         if (path==='/api/poll/close' && method==='POST') {
-          const poll=pollResult(input.id,sid);if(!poll.isOwner)throw ownerRequired();
-          db.prepare('UPDATE polls SET closed=1 WHERE id=? AND owner=?').run(input.id,sid);return json(res,pollResult(input.id,sid));
+          const result=transaction(db,()=>{
+            const poll=pollResult(input.id,sid);if(!poll.isOwner)throw ownerRequired();
+            // Vote and Close commit in SQLite order; a repeated Close does not write again.
+            if(!poll.closed)db.prepare('UPDATE polls SET closed=1 WHERE id=? AND owner=? AND closed=0').run(input.id,sid);
+            return pollResult(input.id,sid);
+          });
+          return json(res,result);
         }
         if (path==='/api/rooms' && method==='GET') {
           const page=Math.min(10000,Math.max(0,Math.floor(Number(url.searchParams.get('page'))||0)));
