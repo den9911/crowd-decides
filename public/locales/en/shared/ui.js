@@ -14,7 +14,7 @@ export async function api(path, input, headers = {}, options = {}) {
   const response = await fetch(path,{signal:options.signal,method:input===undefined?'GET':'POST',headers:{...(input===undefined?{}:{'Content-Type':'application/json'}),...headers},...(input===undefined?{}:{body:JSON.stringify(input)})});
   const result=await response.json();
   const {localizeResponse,localizeError}=await import('./editorial.js');
-  if (!response.ok) {const error=new Error(localizeError(result.error??'The request could not be completed.'));error.status=response.status;if(['OWNER_SESSION_REQUIRED','POLL_REQUEST_CONFLICT'].includes(result.code))error.code=result.code;throw error;}
+  if (!response.ok) {const error=new Error(localizeError(result.error??'The request could not be completed.'));error.status=response.status;if(['OWNER_SESSION_REQUIRED','POLL_REQUEST_CONFLICT','POLL_CLOSED','POLL_ALREADY_VOTED'].includes(result.code))error.code=result.code;throw error;}
   return localizeResponse(path,result);
 }
 export function action(element, handler, event='click') {

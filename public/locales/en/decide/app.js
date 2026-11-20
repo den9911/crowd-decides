@@ -1,4 +1,4 @@
-import { $, $$, api, escape, action, share, storage, toast } from '/locales/en/shared/ui.js';
+import { $, $$, api, escape, action, share, storage } from '/locales/en/shared/ui.js';
 const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function feedback(message){
@@ -11,8 +11,14 @@ export async function mount(){
   const templateId=new URLSearchParams(location.search).get('copy');
   let template=null;
   if(templateId){
-    try{template=await api(`/api/poll/template?id=${encodeURIComponent(templateId)}`);}
-    catch(error){if(error.code!=='OWNER_SESSION_REQUIRED')throw error;await showPoll(templateId);toast('This session cannot manage the poll. Open it in the creator’s original browser.');return;}
+    try{template=await boundedApi(`/api/poll/template?id=${encodeURIComponent(templateId)}`);}
+    catch(error){
+      if(error.code==='OWNER_SESSION_REQUIRED'){
+        try{await showPoll(templateId);feedback('This session cannot manage the poll. Open it in the creator’s original browser.');return;}catch{}
+      }
+      $('#app').innerHTML='<section class="narrow panel stack"><p role="status">The template could not be loaded. No new poll was created. Check the link and original session, then retry loading.</p><button id="retry-template">Retry loading the template</button><a class="text-button" href="/decide/">Create your own</a></section>';
+      action($('#retry-template'),()=>mount());return;
+    }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
   $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>What are we deciding?</h2>${template?'<p class="note">This is a new draft. Votes and the original closed state are not copied.</p>':''}<label>Question<input name="title" maxlength="160" required placeholder="What should we name our cat?"></label><label>Options — one per line<textarea name="options" maxlength="485" rows="6" required placeholder="Donut&#10;Pixel&#10;Sir Loaf"></textarea></label><p class="small muted">2 to 6 options, up to 80 characters each.</p><button type="submit">Create poll ↗</button></form><div class="stack"><div class="panel stack"><h2>One question. One link.</h2><p class="muted">Create a poll and send it to your chat. Friends can vote without signing up, and everyone sees the result.</p><p class="small muted">Anyone with the link can access the poll. Do not add confidential information.</p></div>${recent.length?`<div class="panel stack"><h3>Your recent polls</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">This list stays in your browser. A recent link does not prove ownership.</p></div>`:''}</div></div>`;
@@ -20,7 +26,7 @@ export async function mount(){
   try{const raw=sessionStorage.getItem(pendingKey);pendingInvalid=raw!==null;if(raw&&raw.length<=2000){const value=JSON.parse(raw);if(typeof value.requestId==='string'&&/^[a-f0-9-]{36}$/.test(value.requestId)&&typeof value.title==='string'&&value.title.length<=160&&Array.isArray(value.options)&&value.options.length>=2&&value.options.length<=6&&value.options.every(v=>typeof v==='string'&&v.length<=80)){pending=value;pendingInvalid=false;}}}
   catch{pendingInvalid=true;}
   if(pendingInvalid){form.elements.title.readOnly=true;form.elements.options.readOnly=true;const submit=$('button[type=submit]',form);submit.disabled=true;submit.dataset.lock='true';feedback('The saved request is unavailable. Review recent polls in the original browser before creating another.');}
-  if(pending){form.elements.title.value=pending.title;form.elements.options.value=pending.options.join('\n');form.elements.title.readOnly=true;form.elements.options.readOnly=true;feedback('Creation is unconfirmed. Submit again to retry the same request. Keep your browser data.');}
+  if(pending){form.elements.title.value=pending.title;form.elements.options.value=pending.options.join('\n');form.elements.title.readOnly=true;form.elements.options.readOnly=true;feedback(template?'A creation is still unconfirmed. Retrying the original request; the loaded template is not applied.':'Creation is unconfirmed. Submit again to retry the same request. Keep your browser data.');}
   if(template&&!pending){form.elements.title.value=template.title;form.elements.options.value=template.options.join('\n');}action(form,async()=>{
     if(pendingInvalid)throw new Error('The saved request is unavailable. Review recent polls in the original browser before creating another.');
     const title=form.elements.title.value,options=form.elements.options.value.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -44,9 +50,12 @@ async function showPoll(id){
     // One pending choice: do not offer a competing vote while its result is unknown.
     $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});
     try{await boundedApi('/api/poll/vote',{id,choice:Number(button.dataset.index)});await showPoll(id);}
-    catch{
-      try{await showPoll(id);feedback('The server vote state was refreshed. Check your answer and the result.');}
-      catch{feedback('Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.');}
+    catch(error){
+      try{
+        await showPoll(id);
+        feedback(error.code==='POLL_CLOSED'?'The poll is already closed. The saved result is shown.':error.code==='POLL_ALREADY_VOTED'?'Your vote was already counted. The saved answer is shown.':'The server vote state was refreshed. Check your answer and the result.');
+      }
+      catch{feedback(error.code==='POLL_CLOSED'?'The server confirmed closure. Use Refresh to load the result.':'Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.');}
     }
   }));
   action($('#share'),()=>share(location.href,'Crowd Decides',poll.title));action($('#refresh'),()=>showPoll(id));

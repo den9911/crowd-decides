@@ -522,3 +522,10 @@ Cookies и черновики|Cookies and drafts
 Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.|Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.
 
 Повторить тот же запрос|Retry the same request
+
+Шаблон не загружен. Новый опрос не создан. Проверьте ссылку и исходную сессию, затем повторите загрузку.|The template could not be loaded. No new poll was created. Check the link and original session, then retry loading.
+Повторить загрузку шаблона|Retry loading the template
+Есть неподтверждённое создание. Повторяется прежний запрос; загруженный шаблон не применяется.|A creation is still unconfirmed. Retrying the original request; the loaded template is not applied.
+Опрос уже закрыт. Показан сохранённый результат.|The poll is already closed. The saved result is shown.
+Ваш голос уже учтён. Показан сохранённый ответ.|Your vote was already counted. The saved answer is shown.
+Сервер подтвердил закрытие. Нажмите «Обновить», чтобы загрузить итог.|The server confirmed closure. Use Refresh to load the result.

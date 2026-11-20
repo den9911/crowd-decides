@@ -1,4 +1,4 @@
-import { $, $$, api, escape, action, share, storage, toast } from '/locales/ru/shared/ui.js';
+import { $, $$, api, escape, action, share, storage } from '/locales/ru/shared/ui.js';
 const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function feedback(message){
@@ -11,8 +11,14 @@ export async function mount(){
   const templateId=new URLSearchParams(location.search).get('copy');
   let template=null;
   if(templateId){
-    try{template=await api(`/api/poll/template?id=${encodeURIComponent(templateId)}`);}
-    catch(error){if(error.code!=='OWNER_SESSION_REQUIRED')throw error;await showPoll(templateId);toast('Управление недоступно в этой сессии. Откройте опрос в исходном браузере создателя.');return;}
+    try{template=await boundedApi(`/api/poll/template?id=${encodeURIComponent(templateId)}`);}
+    catch(error){
+      if(error.code==='OWNER_SESSION_REQUIRED'){
+        try{await showPoll(templateId);feedback('Управление недоступно в этой сессии. Откройте опрос в исходном браузере создателя.');return;}catch{}
+      }
+      $('#app').innerHTML='<section class="narrow panel stack"><p role="status">Шаблон не загружен. Новый опрос не создан. Проверьте ссылку и исходную сессию, затем повторите загрузку.</p><button id="retry-template">Повторить загрузку шаблона</button><a class="text-button" href="/decide/">Создать свой</a></section>';
+      action($('#retry-template'),()=>mount());return;
+    }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
   $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и закрытие исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label>Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><button type="submit">Создать голосование ↗</button></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
@@ -20,7 +26,7 @@ export async function mount(){
   try{const raw=sessionStorage.getItem(pendingKey);pendingInvalid=raw!==null;if(raw&&raw.length<=2000){const value=JSON.parse(raw);if(typeof value.requestId==='string'&&/^[a-f0-9-]{36}$/.test(value.requestId)&&typeof value.title==='string'&&value.title.length<=160&&Array.isArray(value.options)&&value.options.length>=2&&value.options.length<=6&&value.options.every(v=>typeof v==='string'&&v.length<=80)){pending=value;pendingInvalid=false;}}}
   catch{pendingInvalid=true;}
   if(pendingInvalid){form.elements.title.readOnly=true;form.elements.options.readOnly=true;const submit=$('button[type=submit]',form);submit.disabled=true;submit.dataset.lock='true';feedback('Сохранённый запрос недоступен. Проверьте недавние опросы в исходном браузере перед новым созданием.');}
-  if(pending){form.elements.title.value=pending.title;form.elements.options.value=pending.options.join('\n');form.elements.title.readOnly=true;form.elements.options.readOnly=true;feedback('Создание ещё не подтверждено. Повторите отправку: будет использован тот же запрос. Не очищайте данные браузера.');}
+  if(pending){form.elements.title.value=pending.title;form.elements.options.value=pending.options.join('\n');form.elements.title.readOnly=true;form.elements.options.readOnly=true;feedback(template?'Есть неподтверждённое создание. Повторяется прежний запрос; загруженный шаблон не применяется.':'Создание ещё не подтверждено. Повторите отправку: будет использован тот же запрос. Не очищайте данные браузера.');}
   if(template&&!pending){form.elements.title.value=template.title;form.elements.options.value=template.options.join('\n');}action(form,async()=>{
     if(pendingInvalid)throw new Error('Сохранённый запрос недоступен. Проверьте недавние опросы в исходном браузере перед новым созданием.');
     const title=form.elements.title.value,options=form.elements.options.value.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -44,9 +50,12 @@ async function showPoll(id){
     // One pending choice: do not offer a competing vote while its result is unknown.
     $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});
     try{await boundedApi('/api/poll/vote',{id,choice:Number(button.dataset.index)});await showPoll(id);}
-    catch{
-      try{await showPoll(id);feedback('Состояние голоса перечитано с сервера. Проверьте свой ответ и результат.');}
-      catch{feedback('Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
+    catch(error){
+      try{
+        await showPoll(id);
+        feedback(error.code==='POLL_CLOSED'?'Опрос уже закрыт. Показан сохранённый результат.':error.code==='POLL_ALREADY_VOTED'?'Ваш голос уже учтён. Показан сохранённый ответ.':'Состояние голоса перечитано с сервера. Проверьте свой ответ и результат.');
+      }
+      catch{feedback(error.code==='POLL_CLOSED'?'Сервер подтвердил закрытие. Нажмите «Обновить», чтобы загрузить итог.':'Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
     }
   }));
   action($('#share'),()=>share(location.href,'Решайте',poll.title));action($('#refresh'),()=>showPoll(id));

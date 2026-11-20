@@ -43,5 +43,5 @@ const app=await createApp({dataDir,disableRateLimit:true});
 await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
 process.send({checkpoint:'ready',port:app.server.address().port});
 process.on('message',async message=>{
- if(message==='stop'){await new Promise(r=>app.server.close(r));process.disconnect();}
+ if(message==='stop'){await new Promise(r=>{app.server.close(r);app.server.closeAllConnections();});process.disconnect();}
 });

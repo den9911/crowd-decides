@@ -37,4 +37,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/session-ownership.test.mjs tests/session-crash.test.mjs tests/poll-access.test.mjs tests/poll-idempotency.test.mjs tests/poll-interruption.test.mjs tests/poll-create-recovery.test.mjs tests/poll-close-order.test.mjs
+      - run: node --test tests/session-ownership.test.mjs tests/session-crash.test.mjs tests/poll-access.test.mjs tests/poll-idempotency.test.mjs tests/poll-interruption.test.mjs tests/poll-create-recovery.test.mjs tests/poll-close-order.test.mjs tests/poll-vote-recovery.test.mjs tests/poll-template-boundary.test.mjs

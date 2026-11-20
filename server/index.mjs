@@ -85,6 +85,10 @@ export async function createApp(options = {}) {
     const own=db.prepare('SELECT choice FROM votes WHERE scope=? AND target=? AND voter=?').get('poll',id,sid);
     return {id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,choice:own?.choice ?? null,closed:!!poll.closed,isOwner:poll.owner===sid};
   }
+  function pollConflict(code) {
+    const error=new HttpError(409,code==='POLL_CLOSED'?'Опрос завершён.':'Ваш голос уже учтён.');
+    error.code=code;return error;
+  }
   function ownerRequired() {
     const error=new HttpError(403,'Только исходная сессия создателя может управлять опросом.');
     error.code='OWNER_SESSION_REQUIRED';return error;
@@ -220,13 +224,20 @@ export async function createApp(options = {}) {
           return json(res,{id:result.id},result.replayed?200:201);
         }
         if (path==='/api/poll/template' && method==='GET') {
-          const poll=pollResult(url.searchParams.get('id'),sid);
-          if(!poll.isOwner)throw ownerRequired();
-          return json(res,{title:poll.title,options:poll.options});
+          const id=text(url.searchParams.get('id'),50);
+          // The template boundary reads no votes or creation receipts and exports only editable fields.
+          const source=db.prepare('SELECT owner,title,options FROM polls WHERE id=?').get(id);
+          if(!source)throw new HttpError(404,'Опрос не найден.');
+          if(source.owner!==sid)throw ownerRequired();
+          return json(res,{title:source.title,options:JSON.parse(source.options)});
         }
         if (path==='/api/poll' && method==='GET') return json(res,pollResult(url.searchParams.get('id'),sid));
         if (path==='/api/poll/vote' && method==='POST') {
-          transaction(db,()=>{const poll=pollResult(input.id,sid);if(poll.closed)throw new HttpError(409,'Опрос завершён.');integer(input.choice,0,poll.options.length-1);once('poll',input.id,sid,input.choice);});return json(res,pollResult(input.id,sid));
+          transaction(db,()=>{
+            const poll=pollResult(input.id,sid);if(poll.closed)throw pollConflict('POLL_CLOSED');
+            integer(input.choice,0,poll.options.length-1);
+            try{once('poll',input.id,sid,input.choice);}catch(error){if(error.status===409)throw pollConflict('POLL_ALREADY_VOTED');throw error;}
+          });return json(res,pollResult(input.id,sid));
         }
         if (path==='/api/poll/close' && method==='POST') {
           const result=transaction(db,()=>{
@@ -334,7 +345,7 @@ export async function createApp(options = {}) {
       if (res.headersSent) return res.end();
       const status=error.status ?? (error.code==='ENOENT' || error.code==='ENOTDIR' ? 404:500);
       if (status===500) console.error(error);
-      json(res,{...(['OWNER_SESSION_REQUIRED','POLL_REQUEST_CONFLICT'].includes(error.code)?{code:error.code}:{}),error:status===500?'Что-то пошло не так. Попробуйте ещё раз.':status===404?'Не найдено.':error.message},status);
+      json(res,{...(['OWNER_SESSION_REQUIRED','POLL_REQUEST_CONFLICT','POLL_CLOSED','POLL_ALREADY_VOTED'].includes(error.code)?{code:error.code}:{}),error:status===500?'Что-то пошло не так. Попробуйте ещё раз.':status===404?'Не найдено.':error.message},status);
     }
   });
   server.requestTimeout=15000; server.headersTimeout=10000; server.maxHeadersCount=60;
