@@ -152,3 +152,38 @@ Template loading now uses the existing ten-second client timeout. A failure disp
 Portability CI includes the new vote-process and template-boundary tests on Windows/macOS, alongside full Linux Verify. Template tests record executed SQL without payloads, assert no votes/receipt query, compare source rows and votes before/after repeated GETs, and check a new poll starts open with zero votes and its own creation request. A first local full run hit a 20-second timeout in an older key-crash test; it passed separately. Test-only session-process shutdown now explicitly closes remaining HTTP connections after server.close. The subsequent full run passes; this is teardown hardening, not a confirmed production root-cause fix or a promise that all timing flakiness is eliminated.
 
 W0790 is only 5/10 complete. Separate interruption, resource, recovery, observation and release acceptance for the template workflow remains open. Local browser tests use real HTTP/SQLite with intercepted failed responses; browser E2E is not claimed as part of the dependency-free CI job.
+
+
+## Template recovery acceptance — 21 November
+
+W0790 acceptance is complete in the supported one-process SQLite scope. A test child holds the owner-only GET response before delivery, the TCP client disconnects and the process is killed. After restart the closed source still has its original vote; the template contains only title/options. A failed child INSERT leaves no receipt; the same UUID later creates exactly one open child with zero votes and replays to the same ID. Thirty-two canceled template GETs leave bounded connections (and Linux descriptors); a subsequent valid GET works and no child has been published. Fault hooks are test-only, not environment switches in production.
+
+The browser already provided actionable fixed EN/RU template failure and owner-session messages. Local browser checks exercise network failure/retry, forbidden and missing templates, repeated keyboard GET retries, malformed pending JSON and an existing unconfirmed creation. The pending payload/UUID remains authoritative, an invalid saved intent blocks publication, and no copy GET publishes. These are finite checks, not a heap profile or an automatic ownership recovery feature. No per-request persistent log or retry queue was added.
+
+## Optional poll deadline — 21 November
+
+**Backend/API slice only.** The web creation form still creates polls without a deadline; choosing/displaying a date and countdown, with a pending-intent schema upgrade, remains the next batch. Existing web views already honor the server's closed flag on load/Refresh and after a refused stale vote. They do not update at expiry without a new request.
+
+`POST /api/polls` accepts optional `expiresAt`: null/omitted means no deadline; otherwise a positive integer UTC Unix timestamp in milliseconds within JavaScript Date's range, strictly after server time and at most 365×24 hours ahead. Strings (including ISO dates), booleans, fractions and out-of-range values get HTTP 400 without inserting a poll or receipt. Example using the current browser session:
+
+```js
+const request = {
+  title: 'When do we meet?', options: ['Friday', 'Saturday'],
+  requestId: crypto.randomUUID(), expiresAt: Date.now() + 60 * 60 * 1000
+};
+// Retain this exact intent and the original session until its result is known.
+const response = await fetch('/api/polls', {
+  method: 'POST', headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify(request)
+});
+```
+
+A new poll returns 201 `{id}`. An exact same-owner requestId replay returns 200 with the original ID, even after expiry, because receipt lookup precedes the future-time check. A changed deadline is changed payload: 409 `POLL_REQUEST_CONFLICT`. A foreign session remains 403 `OWNER_SESSION_REQUIRED`. Omitted/null deadlines retain the pre-upgrade request hash format, so existing receipts do not conflict after upgrade. Legacy clients without requestId retain no creation deduplication. Deadlines cannot be edited after creation; there is no update endpoint. Template copies export only title/options, never the source deadline.
+
+`GET /api/poll` and successful vote/Close responses add `expiresAt` (number/null) and `serverNow` (UTC milliseconds). A poll is closed when its stored closed flag is set or serverNow ≥ expiresAt. A vote samples server time **inside its acquired SQLite write transaction**: strictly before expiry it can be stored; at/after it returns 409 `POLL_CLOSED` with no vote. This is the logical decision boundary, not physical click time, HTTP arrival time or an exact wall-clock COMMIT deadline. Manual owner Close remains final.
+
+GET computes expiry without writing. A vote observing expiry commits closed=1 before returning the refusal; throwing inside that transaction would roll the close back. Explicit owner Close also persists the flag for an expired poll. Once stored, closure survives restart and moving the clock backward. **Before a mutating observation persists it, moving server wall time backward can make a previously expired read appear open again.** There is no monotonic-time or scheduler guarantee. Maintain an accurate host clock. A failed expiry UPDATE rolls back, returns generic 500 and does not claim a persisted closure. The caller must reread after an unknown response; vote POST is never automatically repeated.
+
+Migration adds nullable `polls.expires_at` with an integer/range CHECK. Existing rows get null; votes, owner, closed flags and creation receipts are preserved. No timers, workers, extra receipt table, cleanup job or per-poll in-memory resource is added; one column is the bounded per-poll cost. `options.pollNow` is an internal deterministic test seam, not a deployment setting. Tests cover the exact boundary, replay after expiry/restart, changed input, failed expiry writes, manual closure, actual legacy-schema upgrade and storage constraints.
+
+Before upgrading, stop the old process and back up the matching SQLite data and session-key. Do not run an older binary against the upgraded database: it ignores expiry, accepts votes after the deadline and hashes timed requests differently. A rollback requires stopping service and restoring a matched pre-upgrade database/key backup, with an explicit decision about writes made since that backup; simply swapping JavaScript files is unsafe. Backend deployment is separate from static GitHub Pages publishing. No power-loss, multi-process writer, lost-cookie or long-running resource guarantee is added.

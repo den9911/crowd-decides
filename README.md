@@ -90,3 +90,8 @@ Poll creation now retries the same saved request after a lost response, keeping 
 After an interrupted creation, **Retry the same request** preserves the saved intent. Lost vote replies are checked against server state; choices stay locked if that check is unavailable. Closing and voting follow database commit order, and repeating Close does not rewrite an already closed poll.
 
 Polls now explain whether a vote was already counted or the poll was closed. Loading a similar-poll template retries safely without publishing: only the question and options are copied, while an existing unconfirmed creation keeps its original request.
+
+
+## Deadline API
+
+**Optional deadlines (API):** new polls may expire at a server-checked UTC time. Existing polls keep no deadline; the creation-form field is still planned. See [the contract and upgrade limits](OPERATIONS.md#optional-poll-deadline--21-november).

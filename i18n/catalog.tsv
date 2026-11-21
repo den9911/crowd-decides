@@ -529,3 +529,6 @@ Cookies и черновики|Cookies and drafts
 Опрос уже закрыт. Показан сохранённый результат.|The poll is already closed. The saved result is shown.
 Ваш голос уже учтён. Показан сохранённый ответ.|Your vote was already counted. The saved answer is shown.
 Сервер подтвердил закрытие. Нажмите «Обновить», чтобы загрузить итог.|The server confirmed closure. Use Refresh to load the result.
+
+Дедлайн должен быть целым временем UTC в миллисекундах.|The deadline must be an integer UTC time in milliseconds.
+Дедлайн должен быть в будущем, не позднее чем через 365 дней.|The deadline must be in the future and within 365 days.
