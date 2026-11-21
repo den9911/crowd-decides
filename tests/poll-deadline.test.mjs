@@ -23,7 +23,7 @@ test('legacy fingerprint and nullable deadline survive upgrade; templates do not
 });
 test('a refused expiry write rolls back instead of claiming a persisted close; explicit Close is final',async t=>{
  const h=await fixture(t);await h.start();const made=await h.request('/api/polls',{title:'Rollback close',options:['A','B'],expiresAt:h.now+1000});h.now+=1000;
- h.db.exec("CREATE TRIGGER block_expiry BEFORE UPDATE OF closed ON polls BEGIN SELECT RAISE(ABORT,'expiry write refused'); END");const old=console.error;console.error=()=>{};try{assert.equal((await h.request('/api/poll/vote',{id:made.body.id,choice:0})).status,500);}finally{console.error=old;}
+ h.db.exec("CREATE TRIGGER block_expiry BEFORE UPDATE OF closed ON polls BEGIN SELECT RAISE(ABORT,'expiry write refused'); END");const old=console.error,logs=[];console.error=(...args)=>logs.push(args);try{assert.equal((await h.request('/api/poll/vote',{id:made.body.id,choice:0})).status,500);}finally{console.error=old;}assert.deepEqual(logs,[['REQUEST_FAILED','DATABASE']]);assert(!JSON.stringify(logs).includes('expiry write refused'));
  assert.equal(h.db.prepare('SELECT closed FROM polls').get().closed,0);assert.equal(h.db.prepare("SELECT COUNT(*) n FROM votes WHERE scope='poll'").get().n,0);h.db.exec('DROP TRIGGER block_expiry');assert.equal((await h.request('/api/poll/close',{id:made.body.id},made.cookie)).status,200);assert.equal(h.db.prepare('SELECT closed FROM polls').get().closed,1);h.now-=500;assert.equal((await h.request('/api/poll?id='+made.body.id)).body.closed,true);
 });
 test('upgrade preserves an existing receipt, owner, votes and close flag; SQLite enforces deadline storage',async t=>{

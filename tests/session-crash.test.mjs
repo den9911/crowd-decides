@@ -25,7 +25,7 @@ async function fixture(t){
  }
  return {dir,start};
 }
-async function stop(child,hard=false){const exited=once(child,'exit');if(hard)child.kill('SIGKILL');else child.send('stop');await exited;}
+async function stop(child,hard=false){assert.equal(child.exitCode,null,'child must still be alive before intentional shutdown');assert.equal(child.signalCode,null);const exited=once(child,'exit');if(hard)child.kill('SIGKILL');else child.send('stop');await exited;}
 async function request(port,path,input,cookie){const r=await fetch(`http://127.0.0.1:${port}${path}`,{method:input?'POST':'GET',headers:{...(input?{'Content-Type':'application/json'}:{}),...(cookie?{cookie}:{})},...(input?{body:JSON.stringify(input)}:{})});return {status:r.status,body:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
 for(const phase of ['partial-write','before-link','after-link'])test(`hard process death at ${phase} never publishes a partial key`,{timeout:20000},async t=>{
  const h=await fixture(t),first=h.start(phase);await first.next(phase);

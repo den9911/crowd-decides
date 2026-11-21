@@ -357,7 +357,8 @@ export async function createApp(options = {}) {
       if(req.aborted||res.destroyed)return;
       if (res.headersSent) return res.end();
       const status=error.status ?? (error.code==='ENOENT' || error.code==='ENOTDIR' ? 404:500);
-      if (status===500) console.error(error);
+      // Fixed bounded diagnostics: never print a user payload, SQL text, path or secret.
+      if (status===500) console.error('REQUEST_FAILED',error.code==='ERR_SQLITE_ERROR'?'DATABASE':'INTERNAL');
       json(res,{...(['OWNER_SESSION_REQUIRED','POLL_REQUEST_CONFLICT','POLL_CLOSED','POLL_ALREADY_VOTED'].includes(error.code)?{code:error.code}:{}),error:status===500?'Что-то пошло не так. Попробуйте ещё раз.':status===404?'Не найдено.':error.message},status);
     }
   });

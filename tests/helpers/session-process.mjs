@@ -2,7 +2,8 @@
 import fs from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
 const [dataDir,phase]=process.argv.slice(2);
-const pause=async checkpoint=>{process.send({checkpoint});await new Promise(()=>{});};
+// An unresolved promise alone does not keep a child alive at the crash checkpoint.
+const pause=async checkpoint=>{process.channel.ref();process.send({checkpoint});await new Promise(()=>{});};
 const originalOpen=fs.open,originalLink=fs.link;
 let liveHandles=0;
 if(phase==='partial-write'||phase==='write-failure'){
