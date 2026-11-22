@@ -79,13 +79,22 @@ export async function createApp(options = {}) {
     if (!row) throw new HttpError(404,'Публикация не найдена.');
     return row;
   }
-  function pollResult(id,sid,now=pollNow()) {
+  function readPoll(id) {
     text(id,50);
-    const poll=db.prepare('SELECT id,title,options,owner,closed,expires_at FROM polls WHERE id=?').get(id);
+    const poll=db.prepare('SELECT id,title,options,owner,closed,expires_at,hide_results_until_close FROM polls WHERE id=?').get(id);
     if (!poll) throw new HttpError(404,'Опрос не найден.');
-    const counts=db.prepare('SELECT choice,COUNT(*) AS count FROM votes WHERE scope=? AND target=? GROUP BY choice').all('poll',id);
+    return poll;
+  }
+  function pollClosed(poll,now) {
+    return !!poll.closed||deadlineReached(poll.expires_at,now);
+  }
+  function pollResult(id,sid,now=pollNow()) {
+    const poll=readPoll(id);
+    const closed=pollClosed(poll,now),resultsVisible=closed||!poll.hide_results_until_close;
+    // No aggregate query on the hidden path, regardless of who reads it.
+    const counts=resultsVisible?db.prepare('SELECT choice,COUNT(*) AS count FROM votes WHERE scope=? AND target=? GROUP BY choice').all('poll',id):null;
     const own=db.prepare('SELECT choice FROM votes WHERE scope=? AND target=? AND voter=?').get('poll',id,sid);
-    return {id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,choice:own?.choice ?? null,closed:!!poll.closed||deadlineReached(poll.expires_at,now),isOwner:poll.owner===sid,expiresAt:poll.expires_at,serverNow:now};
+    return {id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,resultsVisible,choice:own?.choice ?? null,closed,isOwner:poll.owner===sid,expiresAt:poll.expires_at,serverNow:now};
   }
   function pollConflict(code) {
     const error=new HttpError(409,code==='POLL_CLOSED'?'Опрос завершён.':'Ваш голос уже учтён.');
@@ -212,7 +221,9 @@ export async function createApp(options = {}) {
           const requestId=input.requestId??null;
           if(requestId!==null&&(typeof requestId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(requestId)))throw new HttpError(400,'Некорректный идентификатор создания.');
           const expiresAt=deadlineValue(input.expiresAt);
-          const hash=creationFingerprint(title,choices,expiresAt);
+          const hideResults=input.hideResultsUntilClose;
+          if(hideResults!==undefined&&typeof hideResults!=='boolean')throw new HttpError(400,'Для скрытия результатов укажите true или false.');
+          const hash=creationFingerprint(title,choices,expiresAt,hideResults);
           const result=transaction(db,()=>{
             const previous=requestId===null?null:db.prepare('SELECT id,owner,request_hash FROM polls WHERE request_id=?').get(requestId);
             if(previous){
@@ -222,7 +233,7 @@ export async function createApp(options = {}) {
             }
             validateNewDeadline(expiresAt,pollNow());
             throttle(req,'publish',8);
-            const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created,request_id,request_hash,expires_at) VALUES(?,?,?,?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now(),requestId,requestId===null?null:hash,expiresAt);
+            const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created,request_id,request_hash,expires_at,hide_results_until_close) VALUES(?,?,?,?,?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now(),requestId,requestId===null?null:hash,expiresAt,hideResults?1:0);
             return {id,replayed:false};
           });
           return json(res,{id:result.id},result.replayed?200:201);
@@ -238,13 +249,13 @@ export async function createApp(options = {}) {
         if (path==='/api/poll' && method==='GET') return json(res,pollResult(url.searchParams.get('id'),sid));
         if (path==='/api/poll/vote' && method==='POST') {
           const outcome=transaction(db,()=>{
-            const now=pollNow(),poll=pollResult(input.id,sid,now);
-            if(poll.closed){
+            const now=pollNow(),poll=readPoll(input.id);
+            if(pollClosed(poll,now)){
               // Commit an observed expiry before returning a refusal: throwing here would roll it back.
-              if(deadlineReached(poll.expiresAt,now))db.prepare('UPDATE polls SET closed=1 WHERE id=? AND closed=0').run(input.id);
+              if(deadlineReached(poll.expires_at,now))db.prepare('UPDATE polls SET closed=1 WHERE id=? AND closed=0').run(input.id);
               return 'POLL_CLOSED';
             }
-            integer(input.choice,0,poll.options.length-1);
+            integer(input.choice,0,JSON.parse(poll.options).length-1);
             try{once('poll',input.id,sid,input.choice);}catch(error){if(error.status===409)return 'POLL_ALREADY_VOTED';throw error;}
             return null;
           });
@@ -253,10 +264,9 @@ export async function createApp(options = {}) {
         }
         if (path==='/api/poll/close' && method==='POST') {
           const result=transaction(db,()=>{
-            const poll=pollResult(input.id,sid);if(!poll.isOwner)throw ownerRequired();
+            const poll=readPoll(input.id);if(poll.owner!==sid)throw ownerRequired();
             // Vote and Close commit in SQLite order; a repeated Close does not write again.
-            const stored=db.prepare('SELECT closed FROM polls WHERE id=?').get(input.id);
-            if(!stored.closed)db.prepare('UPDATE polls SET closed=1 WHERE id=? AND owner=? AND closed=0').run(input.id,sid);
+            if(!poll.closed)db.prepare('UPDATE polls SET closed=1 WHERE id=? AND owner=? AND closed=0').run(input.id,sid);
             return pollResult(input.id,sid);
           });
           return json(res,result);

@@ -12,7 +12,9 @@ export function validateNewDeadline(value,now){
  if(value!==null&&(value<=now||value-now>MAX_DEADLINE_SPAN))throw new HttpError(400,'Дедлайн должен быть в будущем, не позднее чем через 365 дней.');
 }
 export function deadlineReached(value,now){return value!==null&&now>=value;}
-export function creationFingerprint(title,options,expiresAt){
- // Preserve pre-deadline receipt hashes for omitted/null deadlines.
- return createHash('sha256').update(JSON.stringify(expiresAt===null?[title,options]:[title,options,expiresAt])).digest('hex');
+export function creationFingerprint(title,options,expiresAt,hideResultsUntilClose=false){
+ // Keep both previously persisted hashes for the default visibility policy.
+ const fields=hideResultsUntilClose?[title,options,expiresAt,true]:
+  expiresAt===null?[title,options]:[title,options,expiresAt];
+ return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }

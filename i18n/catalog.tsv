@@ -532,3 +532,14 @@ Cookies и черновики|Cookies and drafts
 
 Дедлайн должен быть целым временем UTC в миллисекундах.|The deadline must be an integer UTC time in milliseconds.
 Дедлайн должен быть в будущем, не позднее чем через 365 дней.|The deadline must be in the future and within 365 days.
+Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.|This is a new draft. Votes and closing settings are not copied.
+Дедлайн (UTC, необязательно)|Deadline (UTC, optional)
+Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.|Leave blank for no deadline. Enter a UTC date and time up to 365 days ahead.
+Ваше местное время: |Your local time: 
+Без срока.|No deadline.
+Укажите корректные дату и время UTC.|Enter a valid UTC date and time.
+Укажите вопрос и от 2 до 6 вариантов, до 80 символов каждый.|Enter a question and 2 to 6 options, up to 80 characters each.
+Результаты откроются после завершения опроса.|Results will be shown when the poll closes.
+Дедлайн: |Deadline: 
+Опрос уже закрыт. Состояние перечитано с сервера.|The poll is already closed. Its status has been refreshed from the server.
+Для скрытия результатов укажите true или false.|Use true or false to set result visibility.

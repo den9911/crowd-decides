@@ -94,4 +94,4 @@ Polls now explain whether a vote was already counted or the poll was closed. Loa
 
 ## Deadline API
 
-**Optional deadlines (API):** new polls may expire at a server-checked UTC time. Existing polls keep no deadline; the creation-form field is still planned. See [the contract and upgrade limits](OPERATIONS.md#optional-poll-deadline--21-november).
+**Optional deadlines:** enter a UTC date and time in the creation form, with a local-time preview. Leave it blank to create a poll without a deadline. API clients can also hide results until the poll closes. See [poll settings and upgrade notes](OPERATIONS.md#deadline-form-and-hidden-results--22-november).

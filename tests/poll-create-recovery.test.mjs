@@ -12,12 +12,12 @@ async function kill(c){const ended=once(c,'exit');c.kill('SIGKILL');await ended;
 async function req(port,path,input,cookie){const r=await fetch(`http://127.0.0.1:${port}${path}`,{method:input?'POST':'GET',headers:{...(input?{'content-type':'application/json'}:{}),...(cookie?{cookie}:{})},...(input?{body:JSON.stringify(input)}:{})});return {status:r.status,body:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
 async function socket(port){const s=connect(port,'127.0.0.1');s.on('error',()=>{});await once(s,'connect');return s;}
 test('creation committed without a response replays after hard restart without a second row',async t=>{
- const h=await fixture(t),first=h.start('lose-create-response'),{port}=await first.next('ready');const session=await req(port,'/api/config'),key=await readFile(join(h.dir,'session-key'));const input={requestId:randomUUID(),title:'Survive crash',options:['A','B']},body=JSON.stringify(input),s=await socket(port);t.after(()=>s.destroy());
+ const h=await fixture(t),first=h.start('lose-create-response'),{port}=await first.next('ready');const session=await req(port,'/api/config'),key=await readFile(join(h.dir,'session-key'));const input={requestId:randomUUID(),title:'Survive crash',options:['A','B'],expiresAt:Date.now()+600000,hideResultsUntilClose:true},body=JSON.stringify(input),s=await socket(port);t.after(()=>s.destroy());
  s.write(`POST /api/polls HTTP/1.1\r\nHost: localhost\r\nCookie: ${session.cookie}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);await first.next('committed');s.destroy();await kill(first);
  const again=h.start(),ready=await again.next('ready');assert.deepEqual(await readFile(join(h.dir,'session-key')),key);
  const replay=await req(ready.port,'/api/polls',input,session.cookie);assert.equal(replay.status,200);
  for(let i=0;i<5;i++)assert.deepEqual((await req(ready.port,'/api/polls',input,session.cookie)).body,replay.body);
- assert.equal((await req(ready.port,'/api/poll?id='+replay.body.id,null,session.cookie)).body.isOwner,true);
+ const restored=(await req(ready.port,'/api/poll?id='+replay.body.id,null,session.cookie)).body;assert.equal(restored.isOwner,true);assert.equal(restored.expiresAt,input.expiresAt);assert.equal(restored.counts,null);assert.equal(restored.resultsVisible,false);
  const {DatabaseSync}=await import('node:sqlite'),db=new DatabaseSync(join(h.dir,'minute.sqlite'),{readOnly:true});try{assert.equal(db.prepare('SELECT COUNT(*) n FROM polls').get().n,1);assert.equal(db.prepare('SELECT request_id FROM polls').get().request_id,input.requestId);}finally{db.close();}
 });
 test('32 interrupted creations release sockets and descriptors; no receipt exists before a complete body',async t=>{

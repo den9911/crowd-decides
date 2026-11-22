@@ -55,6 +55,7 @@ export function openStore(filename) {
   if(!columns.includes('request_id'))db.exec('ALTER TABLE polls ADD COLUMN request_id TEXT');
   if(!columns.includes('request_hash'))db.exec('ALTER TABLE polls ADD COLUMN request_hash TEXT');
   if(!columns.includes('expires_at'))db.exec("ALTER TABLE polls ADD COLUMN expires_at INTEGER CHECK(expires_at IS NULL OR (typeof(expires_at)='integer' AND expires_at>0 AND expires_at<=8640000000000000))");
+  if(!columns.includes('hide_results_until_close'))db.exec("ALTER TABLE polls ADD COLUMN hide_results_until_close INTEGER NOT NULL DEFAULT 0 CHECK(hide_results_until_close IN (0,1))");
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS polls_request ON polls(request_id) WHERE request_id IS NOT NULL');
   const insert = db.prepare('INSERT OR IGNORE INTO posts(id,kind,title,body,category,owner,status,created) VALUES (?,?,?,?,?,?,?,?)');
   seedMemes.forEach(([title, body, color], i) => insert.run(`seed-${i}`, 'arena', title, body, color, 'editor', 'approved', i));
