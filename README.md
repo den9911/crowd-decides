@@ -95,3 +95,11 @@ Polls now explain whether a vote was already counted or the poll was closed. Loa
 ## Deadline API
 
 **Optional deadlines:** enter a UTC date and time in the creation form, with a local-time preview. Leave it blank to create a poll without a deadline. API clients can also hide results until the poll closes. See [poll settings and upgrade notes](OPERATIONS.md#deadline-form-and-hidden-results--22-november).
+
+### Poll settings and multiple-choice mode (23 November)
+
+The creation form now offers **Hide results until closing** (opt-in) and **Multiple options** (opt-in). The defaults are unchanged: one answer per visitor and aggregate results visible for an open poll. Multi-choice ballots allow one to six distinct selected options, with one immutable ballot per browser session. The UI counts participants separately from per-option selections; percentages for multi-choice polls can sum above 100%. Anonymous browser sessions do not verify unique persons.
+
+Pending creation intents use version 2 and pin the request UUID, deadline, visibility and choice mode. Legacy saved intents are read with defaults; a replay cannot silently change settings. The server preserves legacy single-choice creation hashes and votes, and stores multi-choice ballots separately. Hidden polls return no aggregate or ballot total to any visitor until closure. This does not hide any results already exposed before closing.
+
+**Deployment:** Back up the SQLite WAL set and original session key together. Deploy backend and generated frontend from the same tested commit, then check real HTTP behavior. GitHub Pages only publishes static assets, not the Node.js backend. A rollback of only the server binary is not safe once new-mode polls have been written. See [OPERATIONS.md](OPERATIONS.md).
