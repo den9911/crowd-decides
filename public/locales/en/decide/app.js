@@ -105,7 +105,7 @@ async function showPoll(id,trigger){
   const selected=multiple?(Array.isArray(poll.choice)?poll.choice:[]):poll.choice===null?[]:[Number(poll.choice)];
   const canVote=poll.choice===null&&!poll.closed;
   const choices=!canVote?'':multiple?
-    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Select one or more options</legend>${poll.options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">One person, one ballot. Selected options are saved together.</p><button type="submit">Submit answer</button></form>`:
+    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Select one or more options</legend>${poll.options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">One browser session, one ballot. Selected options are saved together.</p><button type="submit">Submit answer</button></form>`:
     `<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`;
   const results=canVote
     ?resultsVisible?`<p class="small muted">${total} votes. Vote to see the results.</p>`:''

@@ -105,7 +105,7 @@ async function showPoll(id,trigger){
   const selected=multiple?(Array.isArray(poll.choice)?poll.choice:[]):poll.choice===null?[]:[Number(poll.choice)];
   const canVote=poll.choice===null&&!poll.closed;
   const choices=!canVote?'':multiple?
-    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Выберите один или несколько вариантов</legend>${poll.options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">Один человек — один голос. Выбранные варианты будут сохранены вместе.</p><button type="submit">Отправить ответ</button></form>`:
+    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Выберите один или несколько вариантов</legend>${poll.options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">Одна сессия браузера — один ответ. Выбранные варианты будут сохранены вместе.</p><button type="submit">Отправить ответ</button></form>`:
     `<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`;
   const results=canVote
     ?resultsVisible?`<p class="small muted">${total} голосов. Результат откроется после твоего ответа.</p>`:''
