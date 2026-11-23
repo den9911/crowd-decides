@@ -37,7 +37,7 @@ test('real Chromium at 320px: EN/RU, themes, lost create ACK, multi-select and h
       assert.equal(await page.locator('input[name="hideResultsUntilClose"]').isChecked(),false);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no horizontal overflow at 320px');
       await page.locator('input[name="title"]').fill('Board game '+lang+' '+theme);
-      await page.locator('textarea[name="options"]').fill('Alpha\\nBeta\\nGamma');
+      await page.locator('textarea[name="options"]').fill('Alpha\nBeta\nGamma');
       await page.locator('input[name="hideResultsUntilClose"]').check();
       await page.locator('input[name="mode"][value="multiple"]').check();
       await page.locator('input[name="mode"][value="multiple"]').focus();
