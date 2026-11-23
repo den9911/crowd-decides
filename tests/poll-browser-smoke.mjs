@@ -15,7 +15,6 @@ test('real Chromium at 320px: EN/RU, themes, lost create ACK, multi-select and h
   t.after(async()=>{
     await browser.close();
     await new Promise(resolve=>app.server.close(resolve));
-    app.db.close();
     await rm(dataDir,{recursive:true,force:true});
   });
   for(const [lang,theme] of [['en','dark'],['ru','light'],['en','system']]){
