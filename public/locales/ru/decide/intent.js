@@ -18,17 +18,24 @@ export function decodePending(raw){
   const {version,requestId,title,options}=value;
   const legacy=!Object.hasOwn(value,'version')&&!Object.hasOwn(value,'expiresAt');
   const expiresAt=legacy?null:value.expiresAt;
+  const hidden=version===2?value.hideResultsUntilClose:false;
+  const mode=version===2?value.mode:'single';
   const validDeadline=expiresAt===null||(Number.isSafeInteger(expiresAt)&&expiresAt>0&&expiresAt<=maxUtc);
-  if((!legacy&&version!==1)||!validDeadline||Object.hasOwn(value,'hideResultsUntilClose')||
+  if((!legacy&&version!==1&&version!==2)||!validDeadline||
+      (version!==2&&(Object.hasOwn(value,'hideResultsUntilClose')||Object.hasOwn(value,'mode')))||
+      (version===2&&(typeof hidden!=='boolean'||!['single','multiple'].includes(mode)))||
       typeof requestId!=='string'||!requestIdPattern.test(requestId)||
       typeof title!=='string'||title.length<1||title.length>160||
       !Array.isArray(options)||options.length<2||options.length>6||
       options.some(option=>typeof option!=='string'||option.length<1||option.length>80)){
     throw new Error('Invalid pending poll');
   }
-  return {version:1,requestId,title,options,expiresAt};
+  return {version:2,requestId,title,options,expiresAt,hideResultsUntilClose:hidden,mode};
 }
 
-export function pollCreationPayload({requestId,title,options,expiresAt}){
-  return {requestId,title,options,expiresAt};
+/** Keep optional defaults off the HTTP payload for legacy receipt compatibility. */
+export function pollCreationPayload({requestId,title,options,expiresAt,hideResultsUntilClose=false,mode='single'}){
+  return {...{requestId,title,options,expiresAt},
+    ...(hideResultsUntilClose?{hideResultsUntilClose:true}:{}),
+    ...(mode==='multiple'?{mode:'multiple'}:{})};
 }

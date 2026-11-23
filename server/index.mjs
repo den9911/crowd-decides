@@ -81,7 +81,7 @@ export async function createApp(options = {}) {
   }
   function readPoll(id) {
     text(id,50);
-    const poll=db.prepare('SELECT id,title,options,owner,closed,expires_at,hide_results_until_close FROM polls WHERE id=?').get(id);
+    const poll=db.prepare('SELECT id,title,options,owner,closed,expires_at,hide_results_until_close,vote_mode FROM polls WHERE id=?').get(id);
     if (!poll) throw new HttpError(404,'Опрос не найден.');
     return poll;
   }
@@ -91,10 +91,21 @@ export async function createApp(options = {}) {
   function pollResult(id,sid,now=pollNow()) {
     const poll=readPoll(id);
     const closed=pollClosed(poll,now),resultsVisible=closed||!poll.hide_results_until_close;
-    // No aggregate query on the hidden path, regardless of who reads it.
-    const counts=resultsVisible?db.prepare('SELECT choice,COUNT(*) AS count FROM votes WHERE scope=? AND target=? GROUP BY choice').all('poll',id):null;
-    const own=db.prepare('SELECT choice FROM votes WHERE scope=? AND target=? AND voter=?').get('poll',id,sid);
-    return {id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,resultsVisible,choice:own?.choice ?? null,closed,isOwner:poll.owner===sid,expiresAt:poll.expires_at,serverNow:now};
+    // Never query aggregates on a hidden poll; CSS hiding is not a security boundary.
+    const multiple=poll.vote_mode==='multiple';
+    const counts=!resultsVisible?null:multiple?
+      db.prepare("SELECT CAST(j.value AS TEXT) AS choice,COUNT(*) AS count FROM poll_multi_ballots b, json_each(b.choices) j WHERE b.poll_id=? GROUP BY j.value ORDER BY j.value").all(id):
+      db.prepare('SELECT choice,COUNT(*) AS count FROM votes WHERE scope=? AND target=? GROUP BY choice').all('poll',id);
+    const own=multiple?db.prepare('SELECT choices FROM poll_multi_ballots WHERE poll_id=? AND voter=?').get(id,sid):
+      db.prepare('SELECT choice FROM votes WHERE scope=? AND target=? AND voter=?').get('poll',id,sid);
+    const result={id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,resultsVisible,
+      choice:multiple?(own?JSON.parse(own.choices):null):(own?.choice??null),
+      closed,isOwner:poll.owner===sid,expiresAt:poll.expires_at,serverNow:now};
+    if(multiple){
+      result.mode='multiple';
+      result.ballotCount=resultsVisible?db.prepare('SELECT COUNT(*) AS n FROM poll_multi_ballots WHERE poll_id=?').get(id).n:null;
+    }
+    return result;
   }
   function pollConflict(code) {
     const error=new HttpError(409,code==='POLL_CLOSED'?'Опрос завершён.':'Ваш голос уже учтён.');
@@ -223,7 +234,9 @@ export async function createApp(options = {}) {
           const expiresAt=deadlineValue(input.expiresAt);
           const hideResults=input.hideResultsUntilClose;
           if(hideResults!==undefined&&typeof hideResults!=='boolean')throw new HttpError(400,'Для скрытия результатов укажите true или false.');
-          const hash=creationFingerprint(title,choices,expiresAt,hideResults);
+          const mode=input.mode??'single';
+          if(!['single','multiple'].includes(mode)||typeof mode!=='string')throw new HttpError(400,'Неизвестный режим голосования.');
+          const hash=creationFingerprint(title,choices,expiresAt,hideResults,mode);
           const result=transaction(db,()=>{
             const previous=requestId===null?null:db.prepare('SELECT id,owner,request_hash FROM polls WHERE request_id=?').get(requestId);
             if(previous){
@@ -233,7 +246,7 @@ export async function createApp(options = {}) {
             }
             validateNewDeadline(expiresAt,pollNow());
             throttle(req,'publish',8);
-            const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created,request_id,request_hash,expires_at,hide_results_until_close) VALUES(?,?,?,?,?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now(),requestId,requestId===null?null:hash,expiresAt,hideResults?1:0);
+            const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created,request_id,request_hash,expires_at,hide_results_until_close,vote_mode) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now(),requestId,requestId===null?null:hash,expiresAt,hideResults?1:0,mode);
             return {id,replayed:false};
           });
           return json(res,{id:result.id},result.replayed?200:201);
@@ -255,7 +268,18 @@ export async function createApp(options = {}) {
               if(deadlineReached(poll.expires_at,now))db.prepare('UPDATE polls SET closed=1 WHERE id=? AND closed=0').run(input.id);
               return 'POLL_CLOSED';
             }
-            integer(input.choice,0,JSON.parse(poll.options).length-1);
+            const maxChoice=JSON.parse(poll.options).length-1;
+            if(poll.vote_mode==='multiple'){
+              if(input.choice!==undefined||!Array.isArray(input.choices)||input.choices.length<1||
+                  input.choices.length>maxChoice+1||input.choices.some(x=>!Number.isInteger(x)||x<0||x>maxChoice)||
+                  new Set(input.choices).size!==input.choices.length)throw new HttpError(400,'Выберите от одного до шести разных вариантов.');
+              const selected=[...input.choices].sort((a,b)=>a-b);
+              const saved=db.prepare('INSERT OR IGNORE INTO poll_multi_ballots(poll_id,voter,choices,created) VALUES(?,?,?,?)')
+                .run(input.id,sid,JSON.stringify(selected),Date.now());
+              return saved.changes?null:'POLL_ALREADY_VOTED';
+            }
+            if(input.choices!==undefined)throw new HttpError(400,'Ожидается один вариант ответа.');
+            integer(input.choice,0,maxChoice);
             try{once('poll',input.id,sid,input.choice);}catch(error){if(error.status===409)return 'POLL_ALREADY_VOTED';throw error;}
             return null;
           });

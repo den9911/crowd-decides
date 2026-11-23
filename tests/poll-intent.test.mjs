@@ -14,9 +14,20 @@ test('pending decode preserves exact saved deadline including past expiry; unkno
   const legacy={requestId:randomUUID(),title:'Where?',options:['A','B']};
   assert.deepEqual(pollCreationPayload(decodePending(JSON.stringify(legacy))),{...legacy,expiresAt:null});
   const saved={...legacy,version:1,expiresAt:Date.UTC(2020,0,1,12,0)};
-  assert.deepEqual(decodePending(JSON.stringify(saved)),saved);
+  assert.deepEqual(decodePending(JSON.stringify(saved)),{...saved,version:2,hideResultsUntilClose:false,mode:'single'});
+  const current={...saved,version:2,hideResultsUntilClose:true,mode:'multiple'};
+  assert.deepEqual(decodePending(JSON.stringify(current)),current);
+  assert.deepEqual(pollCreationPayload(current),{
+    requestId:current.requestId,title:current.title,options:current.options,
+    expiresAt:current.expiresAt,hideResultsUntilClose:true,mode:'multiple'
+  });
+  assert.deepEqual(pollCreationPayload(decodePending(JSON.stringify(saved))),{
+    requestId:saved.requestId,title:saved.title,options:saved.options,expiresAt:saved.expiresAt
+  });
   for(const value of [{...saved,version:2},{...saved,expiresAt:undefined},{...saved,expiresAt:'2020'},
-      {...saved,hideResultsUntilClose:true},{...legacy,expiresAt:saved.expiresAt},null]){
+      {...saved,hideResultsUntilClose:true},{...legacy,expiresAt:saved.expiresAt},
+      {...current,mode:'invalid'},{...current,hideResultsUntilClose:'true'},
+      {...current,expiresAt:undefined},null]){
     assert.throws(()=>decodePending(JSON.stringify(value)));
   }
 });

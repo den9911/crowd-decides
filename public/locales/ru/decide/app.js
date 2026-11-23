@@ -28,13 +28,17 @@ export async function mount(){
     }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
-  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label>Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><button type="submit">Создать голосование ↗</button></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
+  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label>Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Тип голосования</legend><label><input type="radio" name="mode" value="single" checked> Один вариант</label><label><input type="radio" name="mode" value="multiple"> Несколько вариантов</label><p id="poll-mode-help" class="small muted">При выборе нескольких вариантов участник отмечает один или больше ответов. Изменить тип после публикации нельзя.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Скрывать результаты до закрытия</label><p class="small muted">Пока голосование открыто, ни создатель, ни участники не увидят общий счёт. После закрытия результаты станут доступны всем по ссылке.</p><button type="submit">Создать голосование ↗</button></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
   const form=$('#create-poll'),deadline=form.elements.deadline,preview=$('#poll-deadline-preview');
+  const hiddenControl=form.elements.hideResultsUntilClose;
+  const modeControls=Array.from(form.querySelectorAll('input[name="mode"]'));
   let pending=null,pendingInvalid=false;
   const lockFields=locked=>{
     form.elements.title.readOnly=locked;
     form.elements.options.readOnly=locked;
     deadline.readOnly=locked;
+    hiddenControl.disabled=locked;
+    modeControls.forEach(control=>{control.disabled=locked;});
   };
   function showDeadlinePreview(value){
     preview.textContent=Number.isFinite(value)?'Ваше местное время: '+localDeadline(value):
@@ -53,6 +57,8 @@ export async function mount(){
   }else if(pending){
     form.elements.title.value=pending.title;
     form.elements.options.value=pending.options.join('\n');
+    hiddenControl.checked=pending.hideResultsUntilClose;
+    form.querySelector(`input[name="mode"][value="${pending.mode}"]`).checked=true;
     if(pending.expiresAt!==null)deadline.value=new Date(pending.expiresAt).toISOString().replace(/Z$/,'');
     lockFields(true);
     showDeadlinePreview(pending.expiresAt);
@@ -73,7 +79,9 @@ export async function mount(){
       if(!title||options.length<2||options.length>6||options.some(option=>option.length>80)){
         throw new Error('Укажите вопрос и от 2 до 6 вариантов, до 80 символов каждый.');
       }
-      pending={version:1,requestId:crypto.randomUUID(),title,options,expiresAt};
+      pending={version:2,requestId:crypto.randomUUID(),title,options,expiresAt,
+        hideResultsUntilClose:hiddenControl.checked,
+        mode:form.querySelector('input[name="mode"]:checked').value};
       try{sessionStorage.setItem(pendingKey,JSON.stringify(pending));}
       catch{pending=null;throw new Error('Браузер не разрешил сохранить запрос. Разрешите хранилище сессии перед отправкой.');}
     }
@@ -92,13 +100,17 @@ async function showPoll(id,trigger){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const resultsVisible=poll.resultsVisible!==false&&Array.isArray(poll.counts);
   const counts=resultsVisible?poll.options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0):null;
-  const total=counts?.reduce((a,b)=>a+b,0);
+  const multiple=poll.mode==='multiple';
+  const total=resultsVisible?(multiple?poll.ballotCount:counts.reduce((a,b)=>a+b,0)):null;
+  const selected=multiple?(Array.isArray(poll.choice)?poll.choice:[]):poll.choice===null?[]:[Number(poll.choice)];
   const canVote=poll.choice===null&&!poll.closed;
-  const choices=canVote?`<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`:'';
+  const choices=!canVote?'':multiple?
+    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Выберите один или несколько вариантов</legend>${poll.options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">Один человек — один голос. Выбранные варианты будут сохранены вместе.</p><button type="submit">Отправить ответ</button></form>`:
+    `<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`;
   const results=canVote
     ?resultsVisible?`<p class="small muted">${total} голосов. Результат откроется после твоего ответа.</p>`:''
-    :resultsVisible?`<div>${poll.options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${poll.choice===String(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Всего голосов: ${total}. ${poll.choice!==null?'Твой ответ учтён.':'Опрос завершён.'}</p>`:'';
-  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Результаты откроются после завершения опроса.</p>${poll.choice!==null?`<p>Твой ответ учтён. ${escape(poll.options[Number(poll.choice)])}</p>`:''}</div>`;
+    :resultsVisible?`<div>${poll.options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${selected.includes(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Всего голосов: ${total}. ${poll.choice!==null?'Твой ответ учтён.':'Опрос завершён.'}${multiple?' Один участник может выбрать несколько вариантов.':''}</p>`:'';
+  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Результаты откроются после завершения опроса.</p>${poll.choice!==null?`<p>Твой ответ учтён. ${selected.map(i=>escape(poll.options[i])).join(', ')}</p>`:''}</div>`;
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
     ?`<p class="small muted">Дедлайн: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
   const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
@@ -116,6 +128,17 @@ async function showPoll(id,trigger){
       catch{feedback(error.code==='POLL_CLOSED'?'Сервер подтвердил закрытие. Нажмите «Обновить», чтобы загрузить итог.':'Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
     }
   }));
+  const multiForm=$('#multi-vote');
+  if(multiForm)action(multiForm,async()=>{
+    const checked=Array.from(multiForm.querySelectorAll('input[name="choices"]:checked')).map(input=>Number(input.value));
+    if(!checked.length){feedback('Отметьте хотя бы один вариант.');multiForm.querySelector('input')?.focus();return;}
+    multiForm.querySelectorAll('input,button').forEach(input=>{input.disabled=true;});
+    try{await boundedApi('/api/poll/vote',{id,choices:checked});await showPoll(id,multiForm);}
+    catch(error){
+      try{await showPoll(id,multiForm);feedback('Состояние голоса перечитано с сервера. Проверьте свой ответ и результат.');}
+      catch{feedback(error.code==='POLL_CLOSED'?'Опрос уже закрыт. Нажмите «Обновить».':'Результат голоса не подтверждён. Нажмите «Обновить», не повторяя отправку.');}
+    }
+  },'submit');
   action($('#share'),()=>share(location.href,'Решайте',poll.title));const refresh=$('#refresh');action(refresh,()=>showPoll(id,refresh));
   const close=$('#close');
   if(close)action(close,async()=>{

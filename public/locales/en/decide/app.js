@@ -28,13 +28,17 @@ export async function mount(){
     }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
-  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>What are we deciding?</h2>${template?'<p class="note">This is a new draft. Votes and closing settings are not copied.</p>':''}<label>Question<input name="title" maxlength="160" required placeholder="What should we name our cat?"></label><label>Options — one per line<textarea name="options" maxlength="485" rows="6" required placeholder="Donut&#10;Pixel&#10;Sir Loaf"></textarea></label><p class="small muted">2 to 6 options, up to 80 characters each.</p><label for="poll-deadline">Deadline (UTC, optional)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Leave blank for no deadline. Enter a UTC date and time up to 365 days ahead.</p><p id="poll-deadline-preview" class="small" role="status"></p><button type="submit">Create poll ↗</button></form><div class="stack"><div class="panel stack"><h2>One question. One link.</h2><p class="muted">Create a poll and send it to your chat. Friends can vote without signing up, and everyone sees the result.</p><p class="small muted">Anyone with the link can access the poll. Do not add confidential information.</p></div>${recent.length?`<div class="panel stack"><h3>Your recent polls</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">This list stays in your browser. A recent link does not prove ownership.</p></div>`:''}</div></div>`;
+  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>What are we deciding?</h2>${template?'<p class="note">This is a new draft. Votes and closing settings are not copied.</p>':''}<label>Question<input name="title" maxlength="160" required placeholder="What should we name our cat?"></label><label>Options — one per line<textarea name="options" maxlength="485" rows="6" required placeholder="Donut&#10;Pixel&#10;Sir Loaf"></textarea></label><p class="small muted">2 to 6 options, up to 80 characters each.</p><label for="poll-deadline">Deadline (UTC, optional)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Leave blank for no deadline. Enter a UTC date and time up to 365 days ahead.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Voting type</legend><label><input type="radio" name="mode" value="single" checked> One option</label><label><input type="radio" name="mode" value="multiple"> Multiple options</label><p id="poll-mode-help" class="small muted">For multiple-choice polls, participants select one or more answers. The type cannot change after publication.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Hide results until closing</label><p class="small muted">While voting is open, neither the creator nor voters can see aggregate results. After closing, everyone with the link can see them.</p><button type="submit">Create poll ↗</button></form><div class="stack"><div class="panel stack"><h2>One question. One link.</h2><p class="muted">Create a poll and send it to your chat. Friends can vote without signing up, and everyone sees the result.</p><p class="small muted">Anyone with the link can access the poll. Do not add confidential information.</p></div>${recent.length?`<div class="panel stack"><h3>Your recent polls</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">This list stays in your browser. A recent link does not prove ownership.</p></div>`:''}</div></div>`;
   const form=$('#create-poll'),deadline=form.elements.deadline,preview=$('#poll-deadline-preview');
+  const hiddenControl=form.elements.hideResultsUntilClose;
+  const modeControls=Array.from(form.querySelectorAll('input[name="mode"]'));
   let pending=null,pendingInvalid=false;
   const lockFields=locked=>{
     form.elements.title.readOnly=locked;
     form.elements.options.readOnly=locked;
     deadline.readOnly=locked;
+    hiddenControl.disabled=locked;
+    modeControls.forEach(control=>{control.disabled=locked;});
   };
   function showDeadlinePreview(value){
     preview.textContent=Number.isFinite(value)?'Your local time: '+localDeadline(value):
@@ -53,6 +57,8 @@ export async function mount(){
   }else if(pending){
     form.elements.title.value=pending.title;
     form.elements.options.value=pending.options.join('\n');
+    hiddenControl.checked=pending.hideResultsUntilClose;
+    form.querySelector(`input[name="mode"][value="${pending.mode}"]`).checked=true;
     if(pending.expiresAt!==null)deadline.value=new Date(pending.expiresAt).toISOString().replace(/Z$/,'');
     lockFields(true);
     showDeadlinePreview(pending.expiresAt);
@@ -73,7 +79,9 @@ export async function mount(){
       if(!title||options.length<2||options.length>6||options.some(option=>option.length>80)){
         throw new Error('Enter a question and 2 to 6 options, up to 80 characters each.');
       }
-      pending={version:1,requestId:crypto.randomUUID(),title,options,expiresAt};
+      pending={version:2,requestId:crypto.randomUUID(),title,options,expiresAt,
+        hideResultsUntilClose:hiddenControl.checked,
+        mode:form.querySelector('input[name="mode"]:checked').value};
       try{sessionStorage.setItem(pendingKey,JSON.stringify(pending));}
       catch{pending=null;throw new Error('The browser could not save the request. Allow session storage before submitting.');}
     }
@@ -92,13 +100,17 @@ async function showPoll(id,trigger){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const resultsVisible=poll.resultsVisible!==false&&Array.isArray(poll.counts);
   const counts=resultsVisible?poll.options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0):null;
-  const total=counts?.reduce((a,b)=>a+b,0);
+  const multiple=poll.mode==='multiple';
+  const total=resultsVisible?(multiple?poll.ballotCount:counts.reduce((a,b)=>a+b,0)):null;
+  const selected=multiple?(Array.isArray(poll.choice)?poll.choice:[]):poll.choice===null?[]:[Number(poll.choice)];
   const canVote=poll.choice===null&&!poll.closed;
-  const choices=canVote?`<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`:'';
+  const choices=!canVote?'':multiple?
+    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Select one or more options</legend>${poll.options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">One person, one ballot. Selected options are saved together.</p><button type="submit">Submit answer</button></form>`:
+    `<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`;
   const results=canVote
     ?resultsVisible?`<p class="small muted">${total} votes. Vote to see the results.</p>`:''
-    :resultsVisible?`<div>${poll.options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${poll.choice===String(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Total votes: ${total}. ${poll.choice!==null?'Your vote is counted.':'This poll is closed.'}</p>`:'';
-  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Results will be shown when the poll closes.</p>${poll.choice!==null?`<p>Your vote is counted. ${escape(poll.options[Number(poll.choice)])}</p>`:''}</div>`;
+    :resultsVisible?`<div>${poll.options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${selected.includes(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Total votes: ${total}. ${poll.choice!==null?'Your vote is counted.':'This poll is closed.'}${multiple?' A participant can select multiple options.':''}</p>`:'';
+  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Results will be shown when the poll closes.</p>${poll.choice!==null?`<p>Your vote is counted. ${selected.map(i=>escape(poll.options[i])).join(', ')}</p>`:''}</div>`;
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
     ?`<p class="small muted">Deadline: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
   const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
@@ -116,6 +128,17 @@ async function showPoll(id,trigger){
       catch{feedback(error.code==='POLL_CLOSED'?'The server confirmed closure. Use Refresh to load the result.':'Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.');}
     }
   }));
+  const multiForm=$('#multi-vote');
+  if(multiForm)action(multiForm,async()=>{
+    const checked=Array.from(multiForm.querySelectorAll('input[name="choices"]:checked')).map(input=>Number(input.value));
+    if(!checked.length){feedback('Select at least one option.');multiForm.querySelector('input')?.focus();return;}
+    multiForm.querySelectorAll('input,button').forEach(input=>{input.disabled=true;});
+    try{await boundedApi('/api/poll/vote',{id,choices:checked});await showPoll(id,multiForm);}
+    catch(error){
+      try{await showPoll(id,multiForm);feedback('The server vote state was refreshed. Check your answer and the result.');}
+      catch{feedback(error.code==='POLL_CLOSED'?'The poll is closed. Select Refresh.':'Vote unconfirmed. Select Refresh without resubmitting.');}
+    }
+  },'submit');
   action($('#share'),()=>share(location.href,'Crowd Decides',poll.title));const refresh=$('#refresh');action(refresh,()=>showPoll(id,refresh));
   const close=$('#close');
   if(close)action(close,async()=>{

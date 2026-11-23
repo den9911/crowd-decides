@@ -56,6 +56,13 @@ export function openStore(filename) {
   if(!columns.includes('request_hash'))db.exec('ALTER TABLE polls ADD COLUMN request_hash TEXT');
   if(!columns.includes('expires_at'))db.exec("ALTER TABLE polls ADD COLUMN expires_at INTEGER CHECK(expires_at IS NULL OR (typeof(expires_at)='integer' AND expires_at>0 AND expires_at<=8640000000000000))");
   if(!columns.includes('hide_results_until_close'))db.exec("ALTER TABLE polls ADD COLUMN hide_results_until_close INTEGER NOT NULL DEFAULT 0 CHECK(hide_results_until_close IN (0,1))");
+  // Multiple-choice ballots live outside legacy votes: one immutable selection set per voter.
+  if(!columns.includes('vote_mode'))db.exec("ALTER TABLE polls ADD COLUMN vote_mode TEXT NOT NULL DEFAULT 'single' CHECK(vote_mode IN ('single','multiple'))");
+  db.exec(`CREATE TABLE IF NOT EXISTS poll_multi_ballots (
+    poll_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    voter TEXT NOT NULL, choices TEXT NOT NULL, created INTEGER NOT NULL,
+    PRIMARY KEY(poll_id,voter)
+  );`);
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS polls_request ON polls(request_id) WHERE request_id IS NOT NULL');
   const insert = db.prepare('INSERT OR IGNORE INTO posts(id,kind,title,body,category,owner,status,created) VALUES (?,?,?,?,?,?,?,?)');
   seedMemes.forEach(([title, body, color], i) => insert.run(`seed-${i}`, 'arena', title, body, color, 'editor', 'approved', i));
