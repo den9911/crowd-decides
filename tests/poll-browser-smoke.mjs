@@ -68,7 +68,7 @@ test('real Chromium at 320px: EN/RU, themes, lost create ACK, multi-select and h
       const id=new URL(page.url()).searchParams.get('poll');
       assert.equal(app.db.prepare('SELECT COUNT(*) n FROM polls WHERE id=?').get(id).n,1);
       assert.equal(app.db.prepare('SELECT COUNT(*) n FROM polls WHERE request_id=?').get(original.requestId).n,1);
-      assert.equal(await page.locator('#multi-vote').count(),1);
+      await page.locator('#multi-vote').waitFor();
       await page.locator('#multi-vote input[name="choices"]').nth(0).check();
       await page.locator('#multi-vote input[name="choices"]').nth(2).check();
       await page.locator('#multi-vote button[type="submit"]').click();
