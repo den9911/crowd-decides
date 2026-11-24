@@ -24,7 +24,7 @@ async function fixture(t){
 test('typed UTC meeting slots, one vote per session and additive isolated storage',async t=>{
  const h=await fixture(t);await h.start();const made=await h.request('/api/polls',draft);
  assert.equal(made.status,201);const id=made.body.id;
- const row=h.db.prepare('SELECT vote_mode,poll_kind,options,expires_at FROM polls WHERE id=?').get(id);
+ const row={...h.db.prepare('SELECT vote_mode,poll_kind,options,expires_at FROM polls WHERE id=?').get(id)};
  assert.deepEqual(row,{vote_mode:'single',poll_kind:'meeting',options:'[]',expires_at:expiresAt});
  assert.deepEqual(h.db.prepare('SELECT starts_at FROM poll_meeting_slots WHERE poll_id=? ORDER BY position').all(id).map(x=>x.starts_at),slots);
  const view=await h.request('/api/poll?id='+id);
