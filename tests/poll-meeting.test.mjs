@@ -124,3 +124,29 @@ test('an interrupted meeting vote rolls back, and stopped SQLite/key backup rest
  assert.deepEqual(view.counts,[{choice:'0',count:1}]);
  assert.equal(restored.db.prepare('SELECT COUNT(*) n FROM poll_meeting_votes WHERE poll_id=?').get(id).n,1);
 });
+
+test('DST fallback two distinct UTC instants and server-authoritative expiry never produce a late ballot',async t=>{
+ const h=await fixture(t);
+ h.now=Date.UTC(2027,9,29,12);
+ await h.start();
+ // Both instants appear as 02:30 in Madrid but are one hour apart in UTC.
+ const first=Date.UTC(2027,9,31,0,30),second=Date.UTC(2027,9,31,1,30);
+ const until=Date.UTC(2027,9,30,9);
+ const created=await h.request('/api/polls',{title:'DST weekend',mode:'meeting',
+   slots:[second,first],expiresAt:until,hideResultsUntilClose:true,requestId:randomUUID()});
+ assert.equal(created.status,201);const id=created.body.id;
+ const before=await h.request('/api/poll?id='+id);
+ assert.deepEqual(before.body.slots,[first,second]);assert.equal(before.body.counts,null);
+ h.now=until-1;
+ const vote=await h.request('/api/poll/vote',{id,slot:1});
+ assert.equal(vote.status,200);assert.equal(vote.body.choice,'1');assert.equal(vote.body.counts,null);
+ h.now=until;
+ const refused=await h.request('/api/poll/vote',{id,slot:0});
+ assert.equal(refused.status,409);assert.equal(refused.body.code,'POLL_CLOSED');
+ assert.equal(h.db.prepare('SELECT closed FROM polls WHERE id=?').get(id).closed,1);
+ const result=await h.request('/api/poll?id='+id);
+ assert.deepEqual(result.body.counts,[{choice:'1',count:1}]);
+ h.now=until-60000; // a clock rollback cannot resurrect a persisted close.
+ assert.equal((await h.request('/api/poll/vote',{id,slot:0})).body.code,'POLL_CLOSED');
+ assert.equal(h.db.prepare('SELECT COUNT(*) n FROM poll_meeting_votes WHERE poll_id=?').get(id).n,1);
+});

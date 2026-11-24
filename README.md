@@ -111,3 +111,10 @@ Choose **Schedule a meeting** in the creation form to propose 2–6 distinct UTC
 Meeting polls have `mode:'meeting'`, numeric `slots` (UTC milliseconds), and a separate `poll_meeting_slots` table — never date strings hidden inside ordinary poll choices. Voting sends `{id,slot:index}`. Only one slot can be selected per browser session. The result includes `slots`, `choice` and `counts`; the earlier single/multiple modes and creation hashes are unchanged. The create form never silently copies another meeting's dates.
 
 **Known limits:** these are fixed proposals, not calendar bookings, invitation delivery, capacity management or verified attendance. A participant with a new browser session may vote again. Google/GitHub Pages publishes only static assets; the separate Node backend needs a matching rollout. See [OPERATIONS.md](OPERATIONS.md).
+
+
+### Save an editable poll draft
+
+Use **Save draft** before publishing to keep your title, options, UTC meeting slots, deadline, poll mode and result visibility in **this browser's localStorage only**. Reloading does not publish anything; choose **Restore draft** to load it back into the form. The owner-only **Create similar** link takes precedence when opened and never silently replaces a saved draft. **Delete draft** clears only the local draft; it leaves the current form and any pending publication intact.
+
+Drafts expire after 30 days and contain no request UUID, owner secret or vote data. Missing storage permission, exceeded quota, unsupported versions or corrupted drafts fail safely; delete a damaged draft deliberately rather than overwriting it. The separate sessionStorage pending creation receipt is immutable after an uncertain response and cannot be replaced by a draft. Nothing is synchronized across devices. On successful publication, remove any obsolete saved draft manually.

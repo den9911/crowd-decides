@@ -1,5 +1,6 @@
 import { $, $$, api, escape, action, share, storage } from '/locales/ru/shared/ui.js';
-import {decodePending,parseUtcMinute,pollCreationPayload} from './intent.js';
+import {decodePending,parseUtcMinute,pollCreationPayload,meetingInput} from './intent.js';
+import {readDraft,saveDraft,clearDraft} from './draft.js';
 const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function localDeadline(value){
@@ -28,27 +29,61 @@ export async function mount(){
     }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
-  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label id="poll-options-group">Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p id="poll-options-help" class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label id="meeting-slots-group" hidden>Время встречи (UTC, по одному на строку)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>От 2 до 6 разных дат UTC в течение 365 дней. Дедлайн голосования обязателен и должен быть раньше первой встречи.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Тип голосования</legend><label><input type="radio" name="mode" value="single" checked> Один вариант</label><label><input type="radio" name="mode" value="multiple"> Несколько вариантов</label><label><input type="radio" name="mode" value="meeting"> Выбрать дату встречи</label><p id="poll-mode-help" class="small muted">При выборе нескольких вариантов участник отмечает один или больше ответов. Изменить тип после публикации нельзя.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Скрывать результаты до закрытия</label><p class="small muted">Пока голосование открыто, ни создатель, ни участники не увидят общий счёт. После закрытия результаты станут доступны всем по ссылке.</p><button type="submit">Создать голосование ↗</button></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
+  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label id="poll-options-group">Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p id="poll-options-help" class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label id="meeting-slots-group" hidden>Время встречи (UTC, по одному на строку)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>От 2 до 6 разных дат UTC в течение 365 дней. Дедлайн голосования обязателен и должен быть раньше первой встречи.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Тип голосования</legend><label><input type="radio" name="mode" value="single" checked> Один вариант</label><label><input type="radio" name="mode" value="multiple"> Несколько вариантов</label><label><input type="radio" name="mode" value="meeting"> Выбрать дату встречи</label><p id="poll-mode-help" class="small muted">При выборе нескольких вариантов участник отмечает один или больше ответов. Изменить тип после публикации нельзя.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Скрывать результаты до закрытия</label><p class="small muted">Пока голосование открыто, ни создатель, ни участники не увидят общий счёт. После закрытия результаты станут доступны всем по ссылке.</p><div class="row"><button type="submit">Создать голосование ↗</button><button id="save-poll-draft" class="secondary" type="button">Сохранить черновик</button><button id="restore-poll-draft" class="secondary" type="button">Восстановить черновик</button><button id="delete-poll-draft" class="secondary" type="button">Удалить черновик</button></div><p id="poll-draft-status" class="small muted" role="status" aria-live="polite">Черновик сохраняется только в этом браузере. Он не публикуется автоматически.</p></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
   const form=$('#create-poll'),deadline=form.elements.deadline,preview=$('#poll-deadline-preview');
   const hiddenControl=form.elements.hideResultsUntilClose;
   const modeControls=Array.from(form.querySelectorAll('input[name="mode"]'));
   const slotsControl=form.elements.slots,slotsGroup=$('#meeting-slots-group'),slotsHelp=$('#meeting-slots-help'),slotsPreview=$('#meeting-slots-preview');
   const optionsGroup=$('#poll-options-group'),optionsHelp=$('#poll-options-help');
+  const draftSave=$('#save-poll-draft'),draftRestore=$('#restore-poll-draft'),draftDelete=$('#delete-poll-draft'),draftStatus=$('#poll-draft-status');
+  let savedDraft=null,draftUnreadable=false;
+  try{savedDraft=readDraft(localStorage);}
+  catch{draftUnreadable=true;}
   function meetingInputs(){
     const meeting=form.querySelector('input[name="mode"]:checked').value==='meeting';
     slotsGroup.hidden=slotsHelp.hidden=slotsPreview.hidden=!meeting;
     optionsGroup.hidden=optionsHelp.hidden=meeting;
     slotsGroup.style.display=meeting?'':'none';optionsGroup.style.display=meeting?'none':'';
     slotsControl.required=meeting;form.elements.options.required=!meeting;
-    slotsControl.disabled=!meeting;
-    form.elements.options.disabled=meeting;
+    slotsControl.disabled=!meeting;form.elements.options.disabled=meeting;
+    const expiresAt=deadline.validity.badInput?NaN:parseUtcMinute(deadline.value);
     if(meeting){
-      const lines=slotsControl.value.split('\n').map(x=>x.trim()).filter(Boolean);
-      const ms=lines.map(parseUtcMinute);
-      slotsPreview.textContent=lines.length===0?'Введите время встречи в UTC.':
-        ms.some(x=>!Number.isSafeInteger(x))?'Укажите корректные даты UTC.':
-        'Местное время: '+ms.map(localDeadline).join(' · ');
+      const result=meetingInput(slotsControl.value,expiresAt);
+      const instants=result.slots.map(ms=>new Date(ms).toISOString().slice(0,16)+'Z → '+localDeadline(ms));
+      const descriptions={
+        count:'Укажите от 2 до 6 временных слотов UTC.',
+        format:'Укажите корректные даты UTC.',
+        duplicate:'Временные слоты должны различаться.',
+        bounds:'Все встречи должны быть в будущем в пределах 365 дней.',
+        deadline:'Укажите дедлайн голосования раньше первой встречи.'
+      };
+      slotsPreview.textContent=[...instants,descriptions[result.reason]].filter(Boolean).join(' · ');
     }
+  }
+  function draftFields(){
+    return {title:form.elements.title.value,options:form.elements.options.value,slots:slotsControl.value,
+      deadline:deadline.value,hideResultsUntilClose:hiddenControl.checked,
+      mode:form.querySelector('input[name="mode"]:checked').value};
+  }
+  function draftControls(message=''){
+    draftSave.disabled=!!pending||pendingInvalid||draftUnreadable;
+    draftRestore.disabled=!!pending||pendingInvalid||!savedDraft;
+    draftDelete.disabled=!!pending||pendingInvalid||(!savedDraft&&!draftUnreadable);
+    draftStatus.textContent=message||(
+      pending||pendingInvalid?'Публикация ещё не подтверждена. Черновик не может заменить исходный запрос.':
+      draftUnreadable?'Сохранённый черновик повреждён или недоступен. Удалите его отдельно; запрос публикации не затронут.':
+      savedDraft?'Есть локальный черновик. Восстановите его вручную; отправки на сервер не будет.':
+      'Черновик сохраняется только в этом браузере. Он не публикуется автоматически.');
+  }
+  function applyDraft(draft){
+    form.elements.title.value=draft.title;
+    form.elements.options.value=draft.options;
+    slotsControl.value=draft.slots;deadline.value=draft.deadline;
+    hiddenControl.checked=draft.hideResultsUntilClose;
+    form.querySelector(`input[name="mode"][value="${draft.mode}"]`).checked=true;
+    deadline.setCustomValidity('');
+    meetingInputs();
+    showDeadlinePreview(deadline.value?parseUtcMinute(deadline.value):null);
   }
   modeControls.forEach(control=>control.addEventListener('change',meetingInputs));
   slotsControl.addEventListener('input',meetingInputs);
@@ -58,6 +93,7 @@ export async function mount(){
     form.elements.options.readOnly=locked;
     deadline.readOnly=locked;
     slotsControl.readOnly=locked;
+    draftSave.disabled=locked;draftRestore.disabled=locked;draftDelete.disabled=locked;
     hiddenControl.disabled=locked;
     modeControls.forEach(control=>{control.disabled=locked;});
   };
@@ -68,6 +104,7 @@ export async function mount(){
   deadline.addEventListener('input',()=>{
     deadline.setCustomValidity('');
     showDeadlinePreview(deadline.validity.badInput?NaN:parseUtcMinute(deadline.value));
+    meetingInputs();
   });
   try{pending=decodePending(sessionStorage.getItem(pendingKey));}
   catch{pendingInvalid=true;}
@@ -91,6 +128,27 @@ export async function mount(){
     showDeadlinePreview(null);
   }
   meetingInputs();
+  draftControls();
+  action(draftSave,()=>{
+    if(pending||pendingInvalid||draftUnreadable)return;
+    savedDraft=saveDraft(localStorage,draftFields());
+    draftControls('Черновик сохранён в этом браузере. Публикация не выполнялась.');
+  });
+  action(draftRestore,()=>{
+    if(pending||pendingInvalid)return;
+    const draft=readDraft(localStorage);
+    if(!draft){savedDraft=null;draftControls();return;}
+    savedDraft=draft;
+    applyDraft(draft);
+    form.elements.title.focus();
+    draftControls('Черновик восстановлен. Проверьте поля перед публикацией.');
+  });
+  action(draftDelete,()=>{
+    if(pending||pendingInvalid)return;
+    clearDraft(localStorage);
+    savedDraft=null;draftUnreadable=false;
+    draftControls('Локальный черновик удалён. Форма и запрос публикации не изменились.');
+  });
   action(form,async()=>{
     if(pendingInvalid)return;
     if(!pending){
@@ -102,18 +160,15 @@ export async function mount(){
       const title=form.elements.title.value.trim(),mode=form.querySelector('input[name="mode"]:checked').value;
       const meeting=mode==='meeting';
       const options=meeting?[]:form.elements.options.value.split('\n').map(x=>x.trim()).filter(Boolean);
-      const lines=meeting?slotsControl.value.split('\n').map(x=>x.trim()).filter(Boolean):[];
-      const times=lines.map(parseUtcMinute);
-      const slots=meeting?[...times].sort((a,b)=>a-b):null;
+      const meetingResult=meeting?meetingInput(slotsControl.value,expiresAt):null;
+      const slots=meeting?meetingResult.slots:null;
       if(!title||(!meeting&&(options.length<2||options.length>6||options.some(option=>option.length>80)))){
         throw new Error('Укажите вопрос и от 2 до 6 вариантов, до 80 символов каждый.');
       }
-      if(meeting){
-        const now=Date.now(),year=365*24*60*60*1000;
-        if(slots.length<2||slots.length>6||slots.some((x,i)=>!Number.isSafeInteger(x)||x<=now||x-now>year||(i>0&&x===slots[i-1]))||
-           expiresAt===null||expiresAt>=slots[0]||expiresAt<=now||expiresAt-now>year){
-          throw new Error('Укажите 2–6 разных будущих слотов UTC и дедлайн голосования раньше первой встречи.');
-        }
+      if(meeting&&meetingResult.reason){
+        meetingInputs();
+        (meetingResult.reason==='deadline'?deadline:slotsControl).focus();
+        throw new Error('Укажите 2–6 разных будущих слотов UTC и дедлайн голосования раньше первой встречи.');
       }
       pending={version:3,requestId:crypto.randomUUID(),title,options,slots,expiresAt,
         hideResultsUntilClose:hiddenControl.checked,mode};
@@ -124,7 +179,7 @@ export async function mount(){
     let result;
     try{result=await boundedApi('/api/polls',pollCreationPayload(pending));}
     catch(error){
-      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;lockFields(false);$('#poll-feedback')?.remove();form.removeAttribute('aria-describedby');$('button[type=submit]',form).textContent='Создать голосование ↗';throw error;}
+      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;lockFields(false);draftControls();$('#poll-feedback')?.remove();form.removeAttribute('aria-describedby');$('button[type=submit]',form).textContent='Создать голосование ↗';throw error;}
       if(error.code==='POLL_REQUEST_CONFLICT'){feedback('Этот идентификатор уже использован для другого опроса. Повторите исходный запрос.');return;}
       feedback(error.code==='OWNER_SESSION_REQUIRED'?'Создание связано с исходной сессией браузера. Откройте исходный профиль; новая копия не создана.':'Создание ещё не подтверждено. Повторите отправку: будет использован тот же запрос. Не очищайте данные браузера.');return;
     }
@@ -135,7 +190,7 @@ async function showPoll(id,trigger){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const resultsVisible=poll.resultsVisible!==false&&Array.isArray(poll.counts);
   const meeting=poll.mode==='meeting';
-  const options=meeting?poll.slots.map(localDeadline):poll.options;
+  const options=meeting?poll.slots.map(ms=>localDeadline(ms)+' · UTC '+new Date(ms).toISOString().slice(0,16)+'Z'):poll.options;
   const counts=resultsVisible?options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0):null;
   const multiple=poll.mode==='multiple';
   const total=resultsVisible?(multiple?poll.ballotCount:counts.reduce((a,b)=>a+b,0)):null;

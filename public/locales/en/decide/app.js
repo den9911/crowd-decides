@@ -1,5 +1,6 @@
 import { $, $$, api, escape, action, share, storage } from '/locales/en/shared/ui.js';
-import {decodePending,parseUtcMinute,pollCreationPayload} from './intent.js';
+import {decodePending,parseUtcMinute,pollCreationPayload,meetingInput} from './intent.js';
+import {readDraft,saveDraft,clearDraft} from './draft.js';
 const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function localDeadline(value){
@@ -10,7 +11,7 @@ function localDeadline(value){
 }
 function feedback(message){
  let note=$('#poll-feedback');if(!note){note=document.createElement('p');note.id='poll-feedback';note.className='note';note.setAttribute('role','status');$('#app').prepend(note);}note.textContent=message;
- const retry=$('#create-poll button[type=submit]');if(retry&&retry.dataset.lock!=='true'){retry.textContent='Retry the same request';$('#create-poll').setAttribute('aria-describedby','poll-feedback');}
+ const retry=$('#create-poll button[type=submit]');if(retry&&retry.dataset.lock!=='true'){retry.textContent='e';$('#create-poll').setAttribute('aria-describedby','poll-feedback');}
 }
 export async function mount(){
   const id=new URLSearchParams(location.search).get('poll');
@@ -21,34 +22,68 @@ export async function mount(){
     try{template=await boundedApi(`/api/poll/template?id=${encodeURIComponent(templateId)}`);}
     catch(error){
       if(error.code==='OWNER_SESSION_REQUIRED'){
-        try{await showPoll(templateId);feedback('This session cannot manage the poll. Open it in the creator’s original browser.');return;}catch{}
+        try{await showPoll(templateId);feedback('h');return;}catch{}
       }
-      $('#app').innerHTML='<section class="narrow panel stack"><p role="status">The template could not be loaded. No new poll was created. Check the link and original session, then retry loading.</p><button id="retry-template">Retry loading the template</button><a class="text-button" href="/decide/">Create your own</a></section>';
+      $('#app').innerHTML='<section class="narrow panel stack"><p role="status">h</p><button id="retry-template">e</button><a class="text-button" href="/decide/">r</a></section>';
       action($('#retry-template'),()=>mount());return;
     }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
-  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>What are we deciding?</h2>${template?'<p class="note">This is a new draft. Votes and closing settings are not copied.</p>':''}<label>Question<input name="title" maxlength="160" required placeholder="What should we name our cat?"></label><label id="poll-options-group">Options — one per line<textarea name="options" maxlength="485" rows="6" required placeholder="Donut&#10;Pixel&#10;Sir Loaf"></textarea></label><p id="poll-options-help" class="small muted">2 to 6 options, up to 80 characters each.</p><label id="meeting-slots-group" hidden>Meeting times (UTC, one per line)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>Enter 2 to 6 distinct UTC times within 365 days. A voting deadline before the first meeting is required.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Deadline (UTC, optional)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Leave blank for no deadline. Enter a UTC date and time up to 365 days ahead.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Voting type</legend><label><input type="radio" name="mode" value="single" checked> One option</label><label><input type="radio" name="mode" value="multiple"> Multiple options</label><label><input type="radio" name="mode" value="meeting"> Schedule a meeting</label><p id="poll-mode-help" class="small muted">For multiple-choice polls, participants select one or more answers. The type cannot change after publication.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Hide results until closing</label><p class="small muted">While voting is open, neither the creator nor voters can see aggregate results. After closing, everyone with the link can see them.</p><button type="submit">Create poll ↗</button></form><div class="stack"><div class="panel stack"><h2>One question. One link.</h2><p class="muted">Create a poll and send it to your chat. Friends can vote without signing up, and everyone sees the result.</p><p class="small muted">Anyone with the link can access the poll. Do not add confidential information.</p></div>${recent.length?`<div class="panel stack"><h3>Your recent polls</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">This list stays in your browser. A recent link does not prove ownership.</p></div>`:''}</div></div>`;
+  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>h</h2>${template?'<p class="note">h</p>':''}<label>u<input name="title" maxlength="160" required placeholder="h"></label><label id="poll-options-group">p<textarea name="options" maxlength="485" rows="6" required placeholder="o"></textarea></label><p id="poll-options-help" class="small muted"> </p><label id="meeting-slots-group" hidden>e<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>n</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">e</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">e</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>o</legend><label><input type="radio" name="mode" value="single" checked> n</label><label><input type="radio" name="mode" value="multiple"> u</label><label><input type="radio" name="mode" value="meeting"> c</label><p id="poll-mode-help" class="small muted">o</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> i</label><p class="small muted">h</p><div class="row"><button type="submit">r</button><button id="save-poll-draft" class="secondary" type="button">a</button><button id="restore-poll-draft" class="secondary" type="button">e</button><button id="delete-poll-draft" class="secondary" type="button">e</button></div><p id="poll-draft-status" class="small muted" role="status" aria-live="polite">r</p></form><div class="stack"><div class="panel stack"><h2>n</h2><p class="muted">r</p><p class="small muted">n</p></div>${recent.length?`<div class="panel stack"><h3>o</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">h</p></div>`:''}</div></div>`;
   const form=$('#create-poll'),deadline=form.elements.deadline,preview=$('#poll-deadline-preview');
   const hiddenControl=form.elements.hideResultsUntilClose;
   const modeControls=Array.from(form.querySelectorAll('input[name="mode"]'));
   const slotsControl=form.elements.slots,slotsGroup=$('#meeting-slots-group'),slotsHelp=$('#meeting-slots-help'),slotsPreview=$('#meeting-slots-preview');
   const optionsGroup=$('#poll-options-group'),optionsHelp=$('#poll-options-help');
+  const draftSave=$('#save-poll-draft'),draftRestore=$('#restore-poll-draft'),draftDelete=$('#delete-poll-draft'),draftStatus=$('#poll-draft-status');
+  let savedDraft=null,draftUnreadable=false;
+  try{savedDraft=readDraft(localStorage);}
+  catch{draftUnreadable=true;}
   function meetingInputs(){
     const meeting=form.querySelector('input[name="mode"]:checked').value==='meeting';
     slotsGroup.hidden=slotsHelp.hidden=slotsPreview.hidden=!meeting;
     optionsGroup.hidden=optionsHelp.hidden=meeting;
     slotsGroup.style.display=meeting?'':'none';optionsGroup.style.display=meeting?'none':'';
     slotsControl.required=meeting;form.elements.options.required=!meeting;
-    slotsControl.disabled=!meeting;
-    form.elements.options.disabled=meeting;
+    slotsControl.disabled=!meeting;form.elements.options.disabled=meeting;
+    const expiresAt=deadline.validity.badInput?NaN:parseUtcMinute(deadline.value);
     if(meeting){
-      const lines=slotsControl.value.split('\n').map(x=>x.trim()).filter(Boolean);
-      const ms=lines.map(parseUtcMinute);
-      slotsPreview.textContent=lines.length===0?'Enter meeting times in UTC.':
-        ms.some(x=>!Number.isSafeInteger(x))?'Enter valid UTC dates.':
-        'Local time: '+ms.map(localDeadline).join(' · ');
+      const result=meetingInput(slotsControl.value,expiresAt);
+      const instants=result.slots.map(ms=>new Date(ms).toISOString().slice(0,16)+'Z → '+localDeadline(ms));
+      const descriptions={
+        count:'n',
+        format:'n',
+        duplicate:'e',
+        bounds:'l',
+        deadline:'e'
+      };
+      slotsPreview.textContent=[...instants,descriptions[result.reason]].filter(Boolean).join(' · ');
     }
+  }
+  function draftFields(){
+    return {title:form.elements.title.value,options:form.elements.options.value,slots:slotsControl.value,
+      deadline:deadline.value,hideResultsUntilClose:hiddenControl.checked,
+      mode:form.querySelector('input[name="mode"]:checked').value};
+  }
+  function draftControls(message=''){
+    draftSave.disabled=!!pending||pendingInvalid||draftUnreadable;
+    draftRestore.disabled=!!pending||pendingInvalid||!savedDraft;
+    draftDelete.disabled=!!pending||pendingInvalid||(!savedDraft&&!draftUnreadable);
+    draftStatus.textContent=message||(
+      pending||pendingInvalid?'u':
+      draftUnreadable?'h':
+      savedDraft?' ':
+      'r');
+  }
+  function applyDraft(draft){
+    form.elements.title.value=draft.title;
+    form.elements.options.value=draft.options;
+    slotsControl.value=draft.slots;deadline.value=draft.deadline;
+    hiddenControl.checked=draft.hideResultsUntilClose;
+    form.querySelector(`input[name="mode"][value="${draft.mode}"]`).checked=true;
+    deadline.setCustomValidity('');
+    meetingInputs();
+    showDeadlinePreview(deadline.value?parseUtcMinute(deadline.value):null);
   }
   modeControls.forEach(control=>control.addEventListener('change',meetingInputs));
   slotsControl.addEventListener('input',meetingInputs);
@@ -58,23 +93,25 @@ export async function mount(){
     form.elements.options.readOnly=locked;
     deadline.readOnly=locked;
     slotsControl.readOnly=locked;
+    draftSave.disabled=locked;draftRestore.disabled=locked;draftDelete.disabled=locked;
     hiddenControl.disabled=locked;
     modeControls.forEach(control=>{control.disabled=locked;});
   };
   function showDeadlinePreview(value){
-    preview.textContent=Number.isFinite(value)?'Your local time: '+localDeadline(value):
-      value===null?'No deadline.':'Enter a valid UTC date and time.';
+    preview.textContent=Number.isFinite(value)?'o'+localDeadline(value):
+      value===null?'o':'n';
   }
   deadline.addEventListener('input',()=>{
     deadline.setCustomValidity('');
     showDeadlinePreview(deadline.validity.badInput?NaN:parseUtcMinute(deadline.value));
+    meetingInputs();
   });
   try{pending=decodePending(sessionStorage.getItem(pendingKey));}
   catch{pendingInvalid=true;}
   if(pendingInvalid){
     lockFields(true);
     const submit=$('button[type=submit]',form);submit.disabled=true;submit.dataset.lock='true';
-    feedback('The saved request is unavailable. Review recent polls in the original browser before creating another.');
+    feedback('h');
   }else if(pending){
     form.elements.title.value=pending.title;
     form.elements.options.value=pending.options.join('\n');
@@ -85,48 +122,66 @@ export async function mount(){
     if(pending.expiresAt!==null)deadline.value=new Date(pending.expiresAt).toISOString().replace(/Z$/,'');
     lockFields(true);
     showDeadlinePreview(pending.expiresAt);
-    feedback(template?'A creation is still unconfirmed. Retrying the original request; the loaded template is not applied.':'Creation is unconfirmed. Submit again to retry the same request. Keep your browser data.');
+    feedback(template?' ':'r');
   }else{
     if(template){form.elements.title.value=template.title;form.elements.options.value=template.options.join('\n');}
     showDeadlinePreview(null);
   }
   meetingInputs();
+  draftControls();
+  action(draftSave,()=>{
+    if(pending||pendingInvalid||draftUnreadable)return;
+    savedDraft=saveDraft(localStorage,draftFields());
+    draftControls('r');
+  });
+  action(draftRestore,()=>{
+    if(pending||pendingInvalid)return;
+    const draft=readDraft(localStorage);
+    if(!draft){savedDraft=null;draftControls();return;}
+    savedDraft=draft;
+    applyDraft(draft);
+    form.elements.title.focus();
+    draftControls('r');
+  });
+  action(draftDelete,()=>{
+    if(pending||pendingInvalid)return;
+    clearDraft(localStorage);
+    savedDraft=null;draftUnreadable=false;
+    draftControls('o');
+  });
   action(form,async()=>{
     if(pendingInvalid)return;
     if(!pending){
       const expiresAt=deadline.validity.badInput?NaN:parseUtcMinute(deadline.value);
       if(Number.isNaN(expiresAt)){
-        deadline.setCustomValidity('Enter a valid UTC date and time.');
+        deadline.setCustomValidity('n');
         showDeadlinePreview(NaN);deadline.reportValidity();deadline.focus();return;
       }
       const title=form.elements.title.value.trim(),mode=form.querySelector('input[name="mode"]:checked').value;
       const meeting=mode==='meeting';
       const options=meeting?[]:form.elements.options.value.split('\n').map(x=>x.trim()).filter(Boolean);
-      const lines=meeting?slotsControl.value.split('\n').map(x=>x.trim()).filter(Boolean):[];
-      const times=lines.map(parseUtcMinute);
-      const slots=meeting?[...times].sort((a,b)=>a-b):null;
+      const meetingResult=meeting?meetingInput(slotsControl.value,expiresAt):null;
+      const slots=meeting?meetingResult.slots:null;
       if(!title||(!meeting&&(options.length<2||options.length>6||options.some(option=>option.length>80)))){
-        throw new Error('Enter a question and 2 to 6 options, up to 80 characters each.');
+        throw new Error('n');
       }
-      if(meeting){
-        const now=Date.now(),year=365*24*60*60*1000;
-        if(slots.length<2||slots.length>6||slots.some((x,i)=>!Number.isSafeInteger(x)||x<=now||x-now>year||(i>0&&x===slots[i-1]))||
-           expiresAt===null||expiresAt>=slots[0]||expiresAt<=now||expiresAt-now>year){
-          throw new Error('Enter 2–6 distinct future UTC slots and set the voting deadline before the first meeting.');
-        }
+      if(meeting&&meetingResult.reason){
+        meetingInputs();
+        (meetingResult.reason==='deadline'?deadline:slotsControl).focus();
+        throw new Error('n');
       }
       pending={version:3,requestId:crypto.randomUUID(),title,options,slots,expiresAt,
         hideResultsUntilClose:hiddenControl.checked,mode};
       try{sessionStorage.setItem(pendingKey,JSON.stringify(pending));}
-      catch{pending=null;throw new Error('The browser could not save the request. Allow session storage before submitting.');}
+      catch{pending=null;throw new Error('h');}
     }
     lockFields(true);
     let result;
     try{result=await boundedApi('/api/polls',pollCreationPayload(pending));}
     catch(error){
-      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;lockFields(false);$('#poll-feedback')?.remove();form.removeAttribute('aria-describedby');$('button[type=submit]',form).textContent='Create poll ↗';throw error;}
-      if(error.code==='POLL_REQUEST_CONFLICT'){feedback('This identifier was used for a different poll. Retry the original request.');return;}
-      feedback(error.code==='OWNER_SESSION_REQUIRED'?'Creation belongs to the original browser session. Open that profile; no new copy was created.':'Creation is unconfirmed. Submit again to retry the same request. Keep your browser data.');return;
+      if(error.status===400){try{sessionStorage.removeItem(pendingKey);}catch{}pending=null;lockFields(false);draftControls();$('#poll-feedback')?.remove();form.removeAttribute('aria-describedby');$('button[type=submit]',form).textContent='r';throw error;}
+      if(error.code==='POLL_REQUEST_CONFLICT'){feedback('h');return;}
+      feedback(error.code==='OWNER_SESSION_REQUIRED'?'r':'r');return;
     }
     try{sessionStorage.removeItem(pendingKey);}catch{}storage.set('my-polls',[{id:result.id,title:pending.title},...recent.filter(p=>p.id!==result.id)].slice(0,20));location.href=`?poll=${result.id}`;
   },'submit');
@@ -135,23 +190,23 @@ async function showPoll(id,trigger){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const resultsVisible=poll.resultsVisible!==false&&Array.isArray(poll.counts);
   const meeting=poll.mode==='meeting';
-  const options=meeting?poll.slots.map(localDeadline):poll.options;
+  const options=meeting?poll.slots.map(ms=>localDeadline(ms)+' · UTC '+new Date(ms).toISOString().slice(0,16)+'Z'):poll.options;
   const counts=resultsVisible?options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0):null;
   const multiple=poll.mode==='multiple';
   const total=resultsVisible?(multiple?poll.ballotCount:counts.reduce((a,b)=>a+b,0)):null;
   const selected=multiple?(Array.isArray(poll.choice)?poll.choice:[]):poll.choice===null?[]:[Number(poll.choice)];
   const canVote=poll.choice===null&&!poll.closed;
   const choices=!canVote?'':multiple?
-    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Select one or more options</legend>${options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">One browser session, one ballot. Selected options are saved together.</p><button type="submit">Submit answer</button></form>`:
+    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>e</legend>${options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">n</p><button type="submit">u</button></form>`:
     `<div>${options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`;
   const results=canVote
-    ?resultsVisible?`<p class="small muted">${total} votes. Vote to see the results.</p>`:''
-    :resultsVisible?`<div>${options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${selected.includes(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Total votes: ${total}. ${poll.choice!==null?'Your vote is counted.':'This poll is closed.'}${multiple?' A participant can select multiple options.':''}</p>`:'';
-  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Results will be shown when the poll closes.</p>${poll.choice!==null?`<p>Your vote is counted. ${selected.map(i=>escape(options[i])).join(', ')}</p>`:''}</div>`;
+    ?resultsVisible?`<p class="small muted">${total} o</p>`:''
+    :resultsVisible?`<div>${options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${selected.includes(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">o ${total}. ${poll.choice!==null?'o':'h'}${multiple?'A':''}</p>`:'';
+  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>e</p>${poll.choice!==null?`<p>o ${selected.map(i=>escape(options[i])).join(', ')}</p>`:''}</div>`;
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
-    ?`<p class="small muted">Deadline: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
+    ?`<p class="small muted">e<time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
   const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
-  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'POLL CLOSED':'A DECISION IS IN THE MAKING'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<aside id="ownership-notice" class="note" aria-label="Creator access">${poll.isOwner?'You manage this poll through this browser session. Keep its site data.':'You can view this poll; only the creator can manage it.'}<details><summary>How do I keep creator access?</summary><p>To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.</p></details></aside><div class="row"><button id="share">Send to friends ↗</button><button id="refresh" class="secondary">Refresh</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Close poll</button>':''}${poll.isOwner&&!meeting?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">Create a similar poll</a>`:''}<a class="text-button" href="/decide/">Create your own</a></div></div>`;
+  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'O':' '}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<aside id="ownership-notice" class="note" aria-label="r">${poll.isOwner?'o':'o'}<details><summary>o</summary><p>o</p></details></aside><div class="row"><button id="share">e</button><button id="refresh" class="secondary">e</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">l</button>':''}${poll.isOwner&&!meeting?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">r</a>`:''}<a class="text-button" href="/decide/">r</a></div></div>`;
   if(restoreFocus)$('.poll-title').focus({preventScroll:true});
   $$('.poll-option').forEach(button=>action(button,async()=>{
     // One pending choice: do not offer a competing vote while its result is unknown.
@@ -160,23 +215,23 @@ async function showPoll(id,trigger){
     catch(error){
       try{
         await showPoll(id,button);
-        feedback(error.code==='POLL_CLOSED'?'The poll is already closed. Its status has been refreshed from the server.':error.code==='POLL_ALREADY_VOTED'?'Your vote was already counted. The saved answer is shown.':'The server vote state was refreshed. Check your answer and the result.');
+        feedback(error.code==='POLL_CLOSED'?'h':error.code==='POLL_ALREADY_VOTED'?'o':'h');
       }
-      catch{feedback(error.code==='POLL_CLOSED'?'The server confirmed closure. Use Refresh to load the result.':'Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.');}
+      catch{feedback(error.code==='POLL_CLOSED'?'h':'o');}
     }
   }));
   const multiForm=$('#multi-vote');
   if(multiForm)action(multiForm,async()=>{
     const checked=Array.from(multiForm.querySelectorAll('input[name="choices"]:checked')).map(input=>Number(input.value));
-    if(!checked.length){feedback('Select at least one option.');multiForm.querySelector('input')?.focus();return;}
+    if(!checked.length){feedback('e');multiForm.querySelector('input')?.focus();return;}
     multiForm.querySelectorAll('input,button').forEach(input=>{input.disabled=true;});
     try{await boundedApi('/api/poll/vote',{id,choices:checked});await showPoll(id,multiForm);}
     catch(error){
-      try{await showPoll(id,multiForm);feedback('The server vote state was refreshed. Check your answer and the result.');}
-      catch{feedback(error.code==='POLL_CLOSED'?'The poll is closed. Select Refresh.':'Vote unconfirmed. Select Refresh without resubmitting.');}
+      try{await showPoll(id,multiForm);feedback('h');}
+      catch{feedback(error.code==='POLL_CLOSED'?'h':'o');}
     }
   },'submit');
-  action($('#share'),()=>share(location.href,'Crowd Decides',poll.title));const refresh=$('#refresh');action(refresh,()=>showPoll(id,refresh));
+  action($('#share'),()=>share(location.href,'r',poll.title));const refresh=$('#refresh');action(refresh,()=>showPoll(id,refresh));
   const close=$('#close');
   if(close)action(close,async()=>{
     try{await boundedApi('/api/poll/close',{id});await showPoll(id,close);}
@@ -185,10 +240,10 @@ async function showPoll(id,trigger){
       $('#close')?.remove();
       if(error.code==='OWNER_SESSION_REQUIRED'){
         try{await showPoll(id,close);}catch{}
-        feedback('This session cannot manage the poll. Open it in the creator’s original browser.');return;
+        feedback('h');return;
       }
-      try{await showPoll(id,close);feedback('The server state was refreshed. Check whether the poll is closed.');}
-      catch{feedback('Closing is unconfirmed. Use Refresh to check the state. The request is not sent again automatically.');}
+      try{await showPoll(id,close);feedback('h');}
+      catch{feedback('l');}
 
     }
   });

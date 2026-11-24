@@ -30,12 +30,37 @@ test('meeting date UI publishes typed UTC slots, renders local time and protects
    await page.locator('input[name="mode"][value="meeting"]').check();
    assert.equal(await page.locator('textarea[name="options"]').isVisible(),false);
    assert.equal(await page.locator('textarea[name="slots"]').isVisible(),true);
-   await page.locator('textarea[name="slots"]').fill(slots.map(utc).join('\n'));
+   await page.locator('textarea[name="slots"]').fill([utc(slots[0]),utc(slots[0])].join('\n'));
    await page.locator('input[name="deadline"]').fill(utc(deadline));
+   assert.match(await page.locator('#meeting-slots-preview').innerText(),/distinct|различаться/);
+   await page.locator('textarea[name="slots"]').fill(slots.map(utc).join('\n'));
+   await page.locator('input[name="mode"][value="single"]').check();
+   assert.equal(await page.locator('textarea[name="slots"]').isVisible(),false);
+   await page.locator('input[name="mode"][value="meeting"]').check();
+   assert.equal(await page.locator('textarea[name="slots"]').inputValue(),slots.map(utc).join('\n'));
    await page.locator('input[name="hideResultsUntilClose"]').check();
    assert.equal(await page.locator('#meeting-slots-preview').isVisible(),true);
    assert.equal((await page.locator('#meeting-slots-preview').innerText()).length>10,true);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'320px layout');
+   await page.locator('#save-poll-draft').click();
+   const localDraft=await page.evaluate(()=>localStorage.getItem('minute:poll-draft'));
+   assert.ok(localDraft);
+   let lostCreate=false;
+   await page.route('**/api/polls',async route=>{
+     const response=await route.fetch();assert.equal(response.status(),201);
+     lostCreate=true;await route.abort('failed');
+   });
+   await page.locator('#create-poll button[type="submit"]').click();
+   await page.locator('#poll-feedback').waitFor();
+   assert.equal(lostCreate,true);
+   const intent=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('minute:pending-poll')));
+   assert.equal(intent.version,3);assert.equal(intent.mode,'meeting');
+   assert.deepEqual(intent.slots,slots);assert.equal(intent.expiresAt,deadline);
+   await page.unroute('**/api/polls');
+   await page.reload();await page.locator('#create-poll').waitFor();
+   assert.equal(await page.locator('input[name="mode"][value="meeting"]').isChecked(),true);
+   assert.equal(await page.locator('#save-poll-draft').isDisabled(),true);
+   assert.equal(await page.evaluate(()=>localStorage.getItem('minute:poll-draft')),localDraft);
    await page.locator('#create-poll button[type="submit"]').click();
    await page.waitForURL(url=>url.searchParams.has('poll'));
    const id=new URL(page.url()).searchParams.get('poll');
@@ -46,11 +71,27 @@ test('meeting date UI publishes typed UTC slots, renders local time and protects
    assert.equal(before.counts,null);assert.equal(before.resultsVisible,false);
    await page.locator('.poll-option').last().waitFor();
    assert.equal(await page.locator('.poll-option').count(),2);
+   assert.match(await page.locator('.poll-option').first().innerText(),/UTC/);
+   await page.evaluate(()=>{document.documentElement.style.zoom='1.25';});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),true,'zoom');
+   let lostVote=false;
+   await page.route('**/api/poll/vote',async route=>{
+     const response=await route.fetch();assert.equal(response.status(),200);
+     lostVote=true;await route.abort('failed');
+   });
    await page.locator('.poll-option').last().click();
    await page.locator('#poll-results-hidden').waitFor();
+   assert.equal(lostVote,true);
+   await page.unroute('**/api/poll/vote');
+   const outsider=await browser.newContext({viewport:{width:320,height:800}});
+   try{
+     const guest=await(await outsider.request.get(origin+'/api/poll?id='+id)).json();
+     assert.equal(guest.choice,null);assert.equal(guest.counts,null);
+   }finally{await outsider.close();}
    const voted=await(await context.request.get(origin+'/api/poll?id='+id)).json();
    assert.equal(voted.choice,'1');assert.equal(voted.counts,null);
    assert.equal(app.db.prepare('SELECT COUNT(*) n FROM poll_meeting_votes WHERE poll_id=?').get(id).n,1);
+   assert.equal(app.db.prepare('SELECT COUNT(*) n FROM polls WHERE request_id=?').get(intent.requestId).n,1);
    await page.locator('#close').click();
    await page.locator('.result-line').first().waitFor();
    const finished=await(await context.request.get(origin+'/api/poll?id='+id)).json();

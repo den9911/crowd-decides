@@ -565,3 +565,18 @@ Cookies и черновики|Cookies and drafts
 Укажите корректные даты UTC.|Enter valid UTC dates.
 Местное время: |Local time: 
 Укажите 2–6 разных будущих слотов UTC и дедлайн голосования раньше первой встречи.|Enter 2–6 distinct future UTC slots and set the voting deadline before the first meeting.
+
+Сохранить черновик|Save draft
+Восстановить черновик|Restore draft
+Удалить черновик|Delete draft
+Черновик сохраняется только в этом браузере. Он не публикуется автоматически.|Drafts are stored only in this browser. They are never published automatically.
+Укажите от 2 до 6 временных слотов UTC.|Enter 2 to 6 UTC time slots.
+Временные слоты должны различаться.|Meeting slots must be distinct.
+Все встречи должны быть в будущем в пределах 365 дней.|All meeting times must be in the future and within 365 days.
+Укажите дедлайн голосования раньше первой встречи.|Set a voting deadline before the earliest meeting time.
+Публикация ещё не подтверждена. Черновик не может заменить исходный запрос.|Publication is unconfirmed. A draft cannot replace the original request.
+Сохранённый черновик повреждён или недоступен. Удалите его отдельно; запрос публикации не затронут.|The saved draft is damaged or inaccessible. Delete it separately; the publication request is unaffected.
+Есть локальный черновик. Восстановите его вручную; отправки на сервер не будет.|A local draft exists. Restore it manually; no request is sent to the server.
+Черновик сохранён в этом браузере. Публикация не выполнялась.|Draft saved in this browser. Nothing was published.
+Черновик восстановлен. Проверьте поля перед публикацией.|Draft restored. Check the fields before publishing.
+Локальный черновик удалён. Форма и запрос публикации не изменились.|Local draft deleted. The form and publication request were not changed.

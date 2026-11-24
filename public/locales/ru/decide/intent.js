@@ -46,3 +46,17 @@ export function pollCreationPayload({requestId,title,options,slots,expiresAt,hid
     ...(hideResultsUntilClose?{hideResultsUntilClose:true}:{}),
     ...(mode!=='single'?{mode}:{})};
 }
+
+/** Validate explicit UTC meeting times before committing a versioned pending request. */
+export function meetingInput(raw,expiresAt,now=Date.now()){
+  const rows=raw.split('\n').map(line=>line.trim()).filter(Boolean);
+  if(rows.length<2||rows.length>6)return {slots:[],reason:'count'};
+  const parsed=rows.map(parseUtcMinute);
+  if(parsed.some(ms=>!Number.isSafeInteger(ms)))return {slots:[],reason:'format'};
+  const slots=[...parsed].sort((a,b)=>a-b);
+  if(new Set(slots).size!==slots.length)return {slots,reason:'duplicate'};
+  const span=365*24*60*60*1000;
+  if(slots.some(ms=>ms<=now||ms-now>span))return {slots,reason:'bounds'};
+  if(!Number.isSafeInteger(expiresAt)||expiresAt<=now||expiresAt>=slots[0]||expiresAt-now>span)return {slots,reason:'deadline'};
+  return {slots,reason:null};
+}
