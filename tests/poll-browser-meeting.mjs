@@ -39,7 +39,7 @@ test('meeting date UI publishes typed UTC slots, renders local time and protects
    await page.locator('#create-poll button[type="submit"]').click();
    await page.waitForURL(url=>url.searchParams.has('poll'));
    const id=new URL(page.url()).searchParams.get('poll');
-   const created=app.db.prepare('SELECT poll_kind,options FROM polls WHERE id=?').get(id);
+   const created={...app.db.prepare('SELECT poll_kind,options FROM polls WHERE id=?').get(id)};
    assert.deepEqual(created,{poll_kind:'meeting',options:'[]'});
    const before=await(await context.request.get(origin+'/api/poll?id='+id)).json();
    assert.equal(before.mode,'meeting');assert.deepEqual(before.slots,slots);
