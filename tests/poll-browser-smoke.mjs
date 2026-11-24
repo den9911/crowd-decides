@@ -53,7 +53,7 @@ test('real Chromium at 320px: EN/RU, themes, lost create ACK, multi-select and h
       await page.waitForFunction(()=>document.querySelector('#poll-feedback')!==null);
       assert.equal(dropped,true);
       const original=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('minute:pending-poll')));
-      assert.equal(original.version,2);
+      assert.equal(original.version,3);
       assert.equal(original.hideResultsUntilClose,true);
       assert.equal(original.mode,'multiple');
       await page.unroute('**/api/polls');
