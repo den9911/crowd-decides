@@ -17,7 +17,7 @@ test('bounded request IDs, legacy clients and rollback preserve existing contrac
 test('legacy poll migration preserves the original row and is safe to reopen',async t=>{
  const {DatabaseSync}=await import('node:sqlite'),{writeFile}=await import('node:fs/promises');const dir=await mkdtemp(join(tmpdir(),'poll-migrate-'));t.after(()=>rm(dir,{recursive:true,force:true}));
  const old=new DatabaseSync(join(dir,'minute.sqlite'));old.exec("CREATE TABLE polls(id TEXT PRIMARY KEY,title TEXT NOT NULL,options TEXT NOT NULL,owner TEXT NOT NULL,created INTEGER NOT NULL); INSERT INTO polls VALUES('legacy','Original','[\"A\",\"B\"]','old-owner',123)");old.close();await writeFile(join(dir,'session-key'),'a'.repeat(64));
- for(let i=0;i<2;i++){const app=await createApp({dataDir:dir});assert.deepEqual({...app.db.prepare('SELECT * FROM polls').get()},{id:'legacy',title:'Original',options:'["A","B"]',owner:'old-owner',created:123,closed:0,request_id:null,request_hash:null,expires_at:null,hide_results_until_close:0,vote_mode:'single'});app.db.close();}
+ for(let i=0;i<2;i++){const app=await createApp({dataDir:dir});assert.deepEqual({...app.db.prepare('SELECT * FROM polls').get()},{id:'legacy',title:'Original',options:'["A","B"]',owner:'old-owner',created:123,closed:0,request_id:null,request_hash:null,expires_at:null,hide_results_until_close:0,vote_mode:'single',poll_kind:null});app.db.close();}
 });
 
 test('a rejected creation leaves no receipt across restart, then one valid retry succeeds',async t=>{

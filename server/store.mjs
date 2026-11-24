@@ -63,6 +63,22 @@ export function openStore(filename) {
     voter TEXT NOT NULL, choices TEXT NOT NULL, created INTEGER NOT NULL,
     PRIMARY KEY(poll_id,voter)
   );`);
+  // A separate type avoids rebuilding the earlier checked vote_mode column.
+  if(!columns.includes('poll_kind'))db.exec("ALTER TABLE polls ADD COLUMN poll_kind TEXT CHECK(poll_kind IS NULL OR poll_kind='meeting')");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS poll_meeting_slots (
+      poll_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL CHECK(position>=0 AND position<6),
+      starts_at INTEGER NOT NULL CHECK(typeof(starts_at)='integer' AND starts_at>0 AND starts_at<=8640000000000000),
+      PRIMARY KEY(poll_id,position), UNIQUE(poll_id,starts_at)
+    );
+    CREATE TABLE IF NOT EXISTS poll_meeting_votes (
+      poll_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+      voter TEXT NOT NULL, slot_index INTEGER NOT NULL CHECK(slot_index>=0 AND slot_index<6),
+      created INTEGER NOT NULL, PRIMARY KEY(poll_id,voter),
+      FOREIGN KEY(poll_id,slot_index) REFERENCES poll_meeting_slots(poll_id,position)
+    );
+  `);
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS polls_request ON polls(request_id) WHERE request_id IS NOT NULL');
   const insert = db.prepare('INSERT OR IGNORE INTO posts(id,kind,title,body,category,owner,status,created) VALUES (?,?,?,?,?,?,?,?)');
   seedMemes.forEach(([title, body, color], i) => insert.run(`seed-${i}`, 'arena', title, body, color, 'editor', 'approved', i));

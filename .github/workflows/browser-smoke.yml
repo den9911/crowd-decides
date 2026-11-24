@@ -23,4 +23,4 @@ jobs:
       - name: Compile translations
         run: npm run build
       - name: Run 320px browser regression
-        run: node --test tests/poll-browser-smoke.mjs
+        run: node --test tests/poll-browser-*.mjs

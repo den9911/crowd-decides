@@ -1,4 +1,4 @@
-import {deadlineValue,validateNewDeadline,deadlineReached,creationFingerprint} from './poll-deadline.mjs';
+import {deadlineValue,validateNewDeadline,deadlineReached,creationFingerprint,meetingSlotsValue,validateMeetingSlots,meetingFingerprint} from './poll-deadline.mjs';
 import {loadSessionKey} from './session-key.mjs';
 import {checkStartup} from './startup.mjs';
 import { createServer } from 'node:http';
@@ -81,7 +81,7 @@ export async function createApp(options = {}) {
   }
   function readPoll(id) {
     text(id,50);
-    const poll=db.prepare('SELECT id,title,options,owner,closed,expires_at,hide_results_until_close,vote_mode FROM polls WHERE id=?').get(id);
+    const poll=db.prepare('SELECT id,title,options,owner,closed,expires_at,hide_results_until_close,vote_mode,poll_kind FROM polls WHERE id=?').get(id);
     if (!poll) throw new HttpError(404,'Опрос не найден.');
     return poll;
   }
@@ -91,20 +91,25 @@ export async function createApp(options = {}) {
   function pollResult(id,sid,now=pollNow()) {
     const poll=readPoll(id);
     const closed=pollClosed(poll,now),resultsVisible=closed||!poll.hide_results_until_close;
-    // Never query aggregates on a hidden poll; CSS hiding is not a security boundary.
-    const multiple=poll.vote_mode==='multiple';
-    const counts=!resultsVisible?null:multiple?
-      db.prepare("SELECT CAST(j.value AS TEXT) AS choice,COUNT(*) AS count FROM poll_multi_ballots b, json_each(b.choices) j WHERE b.poll_id=? GROUP BY j.value ORDER BY j.value").all(id):
+    const meeting=poll.poll_kind==='meeting',multiple=poll.vote_mode==='multiple';
+    // Meeting instants are typed UTC data, not strings masquerading as options.
+    const slots=meeting?db.prepare('SELECT starts_at FROM poll_meeting_slots WHERE poll_id=? ORDER BY position').all(id).map(row=>row.starts_at):null;
+    // No aggregate read while hidden for any role or poll type.
+    const counts=!resultsVisible?null:meeting?
+      db.prepare('SELECT CAST(slot_index AS TEXT) AS choice, COUNT(*) AS count FROM poll_meeting_votes WHERE poll_id=? GROUP BY slot_index ORDER BY slot_index').all(id):
+      multiple?db.prepare("SELECT CAST(j.value AS TEXT) AS choice,COUNT(*) AS count FROM poll_multi_ballots b, json_each(b.choices) j WHERE b.poll_id=? GROUP BY j.value ORDER BY j.value").all(id):
       db.prepare('SELECT choice,COUNT(*) AS count FROM votes WHERE scope=? AND target=? GROUP BY choice').all('poll',id);
-    const own=multiple?db.prepare('SELECT choices FROM poll_multi_ballots WHERE poll_id=? AND voter=?').get(id,sid):
+    const own=meeting?db.prepare('SELECT slot_index FROM poll_meeting_votes WHERE poll_id=? AND voter=?').get(id,sid):
+      multiple?db.prepare('SELECT choices FROM poll_multi_ballots WHERE poll_id=? AND voter=?').get(id,sid):
       db.prepare('SELECT choice FROM votes WHERE scope=? AND target=? AND voter=?').get('poll',id,sid);
     const result={id:poll.id,title:poll.title,options:JSON.parse(poll.options),counts,resultsVisible,
-      choice:multiple?(own?JSON.parse(own.choices):null):(own?.choice??null),
+      choice:meeting?(own?String(own.slot_index):null):multiple?(own?JSON.parse(own.choices):null):(own?.choice??null),
       closed,isOwner:poll.owner===sid,expiresAt:poll.expires_at,serverNow:now};
     if(multiple){
       result.mode='multiple';
       result.ballotCount=resultsVisible?db.prepare('SELECT COUNT(*) AS n FROM poll_multi_ballots WHERE poll_id=?').get(id).n:null;
     }
+    if(meeting){result.mode='meeting';result.slots=slots;}
     return result;
   }
   function pollConflict(code) {
@@ -226,17 +231,23 @@ export async function createApp(options = {}) {
         }
         if (path==='/api/polls' && method==='POST') {
           const title=text(input.title,160);
-          if (!Array.isArray(input.options) || input.options.length<2 || input.options.length>6) throw new HttpError(400,'Добавьте от 2 до 6 вариантов.');
-          const choices=input.options.map(v=>text(v,80));
-          if (new Set(choices.map(v=>v.toLowerCase())).size!==choices.length) throw new HttpError(400,'Варианты должны различаться.');
+          const mode=input.mode??'single';
+          if(typeof mode!=='string'||!['single','multiple','meeting'].includes(mode))throw new HttpError(400,'Неизвестный режим голосования.');
+          const meeting=mode==='meeting';
+          if(meeting?(input.options!==undefined):(input.slots!==undefined))throw new HttpError(400,'Поля ответа не соответствуют типу опроса.');
+          const slots=meeting?meetingSlotsValue(input.slots):null;
+          const choices=meeting?[]:(()=>{
+            if(!Array.isArray(input.options)||input.options.length<2||input.options.length>6)throw new HttpError(400,'Добавьте от 2 до 6 вариантов.');
+            const values=input.options.map(v=>text(v,80));
+            if(new Set(values.map(v=>v.toLowerCase())).size!==values.length)throw new HttpError(400,'Варианты должны различаться.');
+            return values;
+          })();
           const requestId=input.requestId??null;
           if(requestId!==null&&(typeof requestId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(requestId)))throw new HttpError(400,'Некорректный идентификатор создания.');
           const expiresAt=deadlineValue(input.expiresAt);
           const hideResults=input.hideResultsUntilClose;
           if(hideResults!==undefined&&typeof hideResults!=='boolean')throw new HttpError(400,'Для скрытия результатов укажите true или false.');
-          const mode=input.mode??'single';
-          if(!['single','multiple'].includes(mode)||typeof mode!=='string')throw new HttpError(400,'Неизвестный режим голосования.');
-          const hash=creationFingerprint(title,choices,expiresAt,hideResults,mode);
+          const hash=meeting?meetingFingerprint(title,slots,expiresAt,hideResults):creationFingerprint(title,choices,expiresAt,hideResults,mode);
           const result=transaction(db,()=>{
             const previous=requestId===null?null:db.prepare('SELECT id,owner,request_hash FROM polls WHERE request_id=?').get(requestId);
             if(previous){
@@ -244,9 +255,16 @@ export async function createApp(options = {}) {
               if(previous.request_hash!==hash){const error=new HttpError(409,'Этот идентификатор уже использован для другого опроса. Повторите исходный запрос.');error.code='POLL_REQUEST_CONFLICT';throw error;}
               return {id:previous.id,replayed:true};
             }
-            validateNewDeadline(expiresAt,pollNow());
+            const now=pollNow();
+            validateNewDeadline(expiresAt,now);
+            if(meeting)validateMeetingSlots(slots,expiresAt,now);
             throttle(req,'publish',8);
-            const id=randomUUID();db.prepare('INSERT INTO polls(id,title,options,owner,created,request_id,request_hash,expires_at,hide_results_until_close,vote_mode) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now(),requestId,requestId===null?null:hash,expiresAt,hideResults?1:0,mode);
+            const id=randomUUID();
+            db.prepare('INSERT INTO polls(id,title,options,owner,created,request_id,request_hash,expires_at,hide_results_until_close,vote_mode,poll_kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id,title,JSON.stringify(choices),sid,Date.now(),requestId,requestId===null?null:hash,expiresAt,hideResults?1:0,meeting?'single':mode,meeting?'meeting':null);
+            if(meeting){
+              const insert=db.prepare('INSERT INTO poll_meeting_slots(poll_id,position,starts_at) VALUES(?,?,?)');
+              slots.forEach((instant,index)=>insert.run(id,index,instant));
+            }
             return {id,replayed:false};
           });
           return json(res,{id:result.id},result.replayed?200:201);
@@ -254,9 +272,10 @@ export async function createApp(options = {}) {
         if (path==='/api/poll/template' && method==='GET') {
           const id=text(url.searchParams.get('id'),50);
           // The template boundary reads no votes or creation receipts and exports only editable fields.
-          const source=db.prepare('SELECT owner,title,options FROM polls WHERE id=?').get(id);
+          const source=db.prepare('SELECT owner,title,options,poll_kind FROM polls WHERE id=?').get(id);
           if(!source)throw new HttpError(404,'Опрос не найден.');
           if(source.owner!==sid)throw ownerRequired();
+          if(source.poll_kind==='meeting')throw new HttpError(400,'Для встречи создайте новый опрос с собственными слотами.');
           return json(res,{title:source.title,options:JSON.parse(source.options)});
         }
         if (path==='/api/poll' && method==='GET') return json(res,pollResult(url.searchParams.get('id'),sid));
@@ -268,6 +287,14 @@ export async function createApp(options = {}) {
               if(deadlineReached(poll.expires_at,now))db.prepare('UPDATE polls SET closed=1 WHERE id=? AND closed=0').run(input.id);
               return 'POLL_CLOSED';
             }
+            if(poll.poll_kind==='meeting'){
+              if(input.choice!==undefined||input.choices!==undefined)throw new HttpError(400,'Для встречи укажите индекс временного слота.');
+              const size=db.prepare('SELECT COUNT(*) AS n FROM poll_meeting_slots WHERE poll_id=?').get(input.id).n;
+              integer(input.slot,0,size-1);
+              const inserted=db.prepare('INSERT OR IGNORE INTO poll_meeting_votes(poll_id,voter,slot_index,created) VALUES(?,?,?,?)').run(input.id,sid,input.slot,Date.now());
+              return inserted.changes?null:'POLL_ALREADY_VOTED';
+            }
+            if(input.slot!==undefined)throw new HttpError(400,'Неверный тип ответа для опроса.');
             const maxChoice=JSON.parse(poll.options).length-1;
             if(poll.vote_mode==='multiple'){
               if(input.choice!==undefined||!Array.isArray(input.choices)||input.choices.length<1||

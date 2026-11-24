@@ -28,15 +28,36 @@ export async function mount(){
     }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
-  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label>Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Тип голосования</legend><label><input type="radio" name="mode" value="single" checked> Один вариант</label><label><input type="radio" name="mode" value="multiple"> Несколько вариантов</label><p id="poll-mode-help" class="small muted">При выборе нескольких вариантов участник отмечает один или больше ответов. Изменить тип после публикации нельзя.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Скрывать результаты до закрытия</label><p class="small muted">Пока голосование открыто, ни создатель, ни участники не увидят общий счёт. После закрытия результаты станут доступны всем по ссылке.</p><button type="submit">Создать голосование ↗</button></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
+  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label id="poll-options-group">Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p id="poll-options-help" class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label id="meeting-slots-group" hidden>Время встречи (UTC, по одному на строку)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>От 2 до 6 разных дат UTC в течение 365 дней. Дедлайн голосования обязателен и должен быть раньше первой встречи.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Тип голосования</legend><label><input type="radio" name="mode" value="single" checked> Один вариант</label><label><input type="radio" name="mode" value="multiple"> Несколько вариантов</label><label><input type="radio" name="mode" value="meeting"> Выбрать дату встречи</label><p id="poll-mode-help" class="small muted">При выборе нескольких вариантов участник отмечает один или больше ответов. Изменить тип после публикации нельзя.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Скрывать результаты до закрытия</label><p class="small muted">Пока голосование открыто, ни создатель, ни участники не увидят общий счёт. После закрытия результаты станут доступны всем по ссылке.</p><button type="submit">Создать голосование ↗</button></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
   const form=$('#create-poll'),deadline=form.elements.deadline,preview=$('#poll-deadline-preview');
   const hiddenControl=form.elements.hideResultsUntilClose;
   const modeControls=Array.from(form.querySelectorAll('input[name="mode"]'));
+  const slotsControl=form.elements.slots,slotsGroup=$('#meeting-slots-group'),slotsHelp=$('#meeting-slots-help'),slotsPreview=$('#meeting-slots-preview');
+  const optionsGroup=$('#poll-options-group'),optionsHelp=$('#poll-options-help');
+  function meetingInputs(){
+    const meeting=form.querySelector('input[name="mode"]:checked').value==='meeting';
+    slotsGroup.hidden=slotsHelp.hidden=slotsPreview.hidden=!meeting;
+    optionsGroup.hidden=optionsHelp.hidden=meeting;
+    slotsGroup.style.display=meeting?'':'none';optionsGroup.style.display=meeting?'none':'';
+    slotsControl.required=meeting;form.elements.options.required=!meeting;
+    slotsControl.disabled=!meeting;
+    form.elements.options.disabled=meeting;
+    if(meeting){
+      const lines=slotsControl.value.split('\n').map(x=>x.trim()).filter(Boolean);
+      const ms=lines.map(parseUtcMinute);
+      slotsPreview.textContent=lines.length===0?'Введите время встречи в UTC.':
+        ms.some(x=>!Number.isSafeInteger(x))?'Укажите корректные даты UTC.':
+        'Местное время: '+ms.map(localDeadline).join(' · ');
+    }
+  }
+  modeControls.forEach(control=>control.addEventListener('change',meetingInputs));
+  slotsControl.addEventListener('input',meetingInputs);
   let pending=null,pendingInvalid=false;
   const lockFields=locked=>{
     form.elements.title.readOnly=locked;
     form.elements.options.readOnly=locked;
     deadline.readOnly=locked;
+    slotsControl.readOnly=locked;
     hiddenControl.disabled=locked;
     modeControls.forEach(control=>{control.disabled=locked;});
   };
@@ -57,8 +78,10 @@ export async function mount(){
   }else if(pending){
     form.elements.title.value=pending.title;
     form.elements.options.value=pending.options.join('\n');
+    slotsControl.value=(pending.slots??[]).map(ms=>new Date(ms).toISOString().slice(0,16)).join('\n');
     hiddenControl.checked=pending.hideResultsUntilClose;
     form.querySelector(`input[name="mode"][value="${pending.mode}"]`).checked=true;
+    meetingInputs();
     if(pending.expiresAt!==null)deadline.value=new Date(pending.expiresAt).toISOString().replace(/Z$/,'');
     lockFields(true);
     showDeadlinePreview(pending.expiresAt);
@@ -67,6 +90,7 @@ export async function mount(){
     if(template){form.elements.title.value=template.title;form.elements.options.value=template.options.join('\n');}
     showDeadlinePreview(null);
   }
+  meetingInputs();
   action(form,async()=>{
     if(pendingInvalid)return;
     if(!pending){
@@ -75,13 +99,24 @@ export async function mount(){
         deadline.setCustomValidity('Укажите корректные дату и время UTC.');
         showDeadlinePreview(NaN);deadline.reportValidity();deadline.focus();return;
       }
-      const title=form.elements.title.value.trim(),options=form.elements.options.value.split('\n').map(s=>s.trim()).filter(Boolean);
-      if(!title||options.length<2||options.length>6||options.some(option=>option.length>80)){
+      const title=form.elements.title.value.trim(),mode=form.querySelector('input[name="mode"]:checked').value;
+      const meeting=mode==='meeting';
+      const options=meeting?[]:form.elements.options.value.split('\n').map(x=>x.trim()).filter(Boolean);
+      const lines=meeting?slotsControl.value.split('\n').map(x=>x.trim()).filter(Boolean):[];
+      const times=lines.map(parseUtcMinute);
+      const slots=meeting?[...times].sort((a,b)=>a-b):null;
+      if(!title||(!meeting&&(options.length<2||options.length>6||options.some(option=>option.length>80)))){
         throw new Error('Укажите вопрос и от 2 до 6 вариантов, до 80 символов каждый.');
       }
-      pending={version:2,requestId:crypto.randomUUID(),title,options,expiresAt,
-        hideResultsUntilClose:hiddenControl.checked,
-        mode:form.querySelector('input[name="mode"]:checked').value};
+      if(meeting){
+        const now=Date.now(),year=365*24*60*60*1000;
+        if(slots.length<2||slots.length>6||slots.some((x,i)=>!Number.isSafeInteger(x)||x<=now||x-now>year||(i>0&&x===slots[i-1]))||
+           expiresAt===null||expiresAt>=slots[0]||expiresAt<=now||expiresAt-now>year){
+          throw new Error('Укажите 2–6 разных будущих слотов UTC и дедлайн голосования раньше первой встречи.');
+        }
+      }
+      pending={version:3,requestId:crypto.randomUUID(),title,options,slots,expiresAt,
+        hideResultsUntilClose:hiddenControl.checked,mode};
       try{sessionStorage.setItem(pendingKey,JSON.stringify(pending));}
       catch{pending=null;throw new Error('Браузер не разрешил сохранить запрос. Разрешите хранилище сессии перед отправкой.');}
     }
@@ -99,27 +134,29 @@ export async function mount(){
 async function showPoll(id,trigger){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const resultsVisible=poll.resultsVisible!==false&&Array.isArray(poll.counts);
-  const counts=resultsVisible?poll.options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0):null;
+  const meeting=poll.mode==='meeting';
+  const options=meeting?poll.slots.map(localDeadline):poll.options;
+  const counts=resultsVisible?options.map((_,i)=>poll.counts.find(c=>c.choice===String(i))?.count??0):null;
   const multiple=poll.mode==='multiple';
   const total=resultsVisible?(multiple?poll.ballotCount:counts.reduce((a,b)=>a+b,0)):null;
   const selected=multiple?(Array.isArray(poll.choice)?poll.choice:[]):poll.choice===null?[]:[Number(poll.choice)];
   const canVote=poll.choice===null&&!poll.closed;
   const choices=!canVote?'':multiple?
-    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Выберите один или несколько вариантов</legend>${poll.options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">Одна сессия браузера — один ответ. Выбранные варианты будут сохранены вместе.</p><button type="submit">Отправить ответ</button></form>`:
-    `<div>${poll.options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`;
+    `<form id="multi-vote" class="stack"><fieldset class="stack"><legend>Выберите один или несколько вариантов</legend>${options.map((option,i)=>`<label><input type="checkbox" name="choices" value="${i}"> ${escape(option)}</label>`).join('')}</fieldset><p class="small muted">Одна сессия браузера — один ответ. Выбранные варианты будут сохранены вместе.</p><button type="submit">Отправить ответ</button></form>`:
+    `<div>${options.map((option,i)=>`<button class="poll-option" data-index="${i}">${escape(option)} <span aria-hidden="true">↗</span></button>`).join('')}</div>`;
   const results=canVote
     ?resultsVisible?`<p class="small muted">${total} голосов. Результат откроется после твоего ответа.</p>`:''
-    :resultsVisible?`<div>${poll.options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${selected.includes(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Всего голосов: ${total}. ${poll.choice!==null?'Твой ответ учтён.':'Опрос завершён.'}${multiple?' Один участник может выбрать несколько вариантов.':''}</p>`:'';
-  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Результаты откроются после завершения опроса.</p>${poll.choice!==null?`<p>Твой ответ учтён. ${selected.map(i=>escape(poll.options[i])).join(', ')}</p>`:''}</div>`;
+    :resultsVisible?`<div>${options.map((option,i)=>`<div class="result-line"><div class="row"><span>${escape(option)} ${selected.includes(i)?'✓':''}</span><strong>${Math.round(counts[i]/Math.max(1,total)*100)}% · ${counts[i]}</strong></div><progress max="${Math.max(1,total)}" value="${counts[i]}" aria-label="${escape(option)}"></progress></div>`).join('')}</div><p class="small muted">Всего голосов: ${total}. ${poll.choice!==null?'Твой ответ учтён.':'Опрос завершён.'}${multiple?' Один участник может выбрать несколько вариантов.':''}</p>`:'';
+  const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Результаты откроются после завершения опроса.</p>${poll.choice!==null?`<p>Твой ответ учтён. ${selected.map(i=>escape(options[i])).join(', ')}</p>`:''}</div>`;
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
     ?`<p class="small muted">Дедлайн: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
   const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
-  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'ОПРОС ЗАВЕРШЁН':'РЕШЕНИЕ ПРИНИМАЕТСЯ'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<aside id="ownership-notice" class="note" aria-label="Доступ создателя">${poll.isOwner?'Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.':'Вы просматриваете опрос. Управлять им может только создатель.'}<details><summary>Как сохранить доступ создателя?</summary><p>Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.</p></details></aside><div class="row"><button id="share">Отправить друзьям ↗</button><button id="refresh" class="secondary">Обновить</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Завершить опрос</button>':''}${poll.isOwner?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">Создать похожий</a>`:''}<a class="text-button" href="/decide/">Создать свой</a></div></div>`;
+  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'ОПРОС ЗАВЕРШЁН':'РЕШЕНИЕ ПРИНИМАЕТСЯ'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<aside id="ownership-notice" class="note" aria-label="Доступ создателя">${poll.isOwner?'Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.':'Вы просматриваете опрос. Управлять им может только создатель.'}<details><summary>Как сохранить доступ создателя?</summary><p>Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.</p></details></aside><div class="row"><button id="share">Отправить друзьям ↗</button><button id="refresh" class="secondary">Обновить</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Завершить опрос</button>':''}${poll.isOwner&&!meeting?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">Создать похожий</a>`:''}<a class="text-button" href="/decide/">Создать свой</a></div></div>`;
   if(restoreFocus)$('.poll-title').focus({preventScroll:true});
   $$('.poll-option').forEach(button=>action(button,async()=>{
     // One pending choice: do not offer a competing vote while its result is unknown.
     $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});
-    try{await boundedApi('/api/poll/vote',{id,choice:Number(button.dataset.index)});await showPoll(id,button);}
+    try{await boundedApi('/api/poll/vote',meeting?{id,slot:Number(button.dataset.index)}:{id,choice:Number(button.dataset.index)});await showPoll(id,button);}
     catch(error){
       try{
         await showPoll(id,button);

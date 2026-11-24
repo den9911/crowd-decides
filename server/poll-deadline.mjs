@@ -19,3 +19,23 @@ export function creationFingerprint(title,options,expiresAt,hideResultsUntilClos
   expiresAt===null?[title,options]:[title,options,expiresAt];
  return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
 }
+
+/** Canonical UTC meeting times; never infer offsets or rely on option text. */
+export function meetingSlotsValue(value){
+ if(!Array.isArray(value)||value.length<2||value.length>6||
+    value.some(ms=>!Number.isSafeInteger(ms)||ms<=0||ms>MAX_DATE)){
+  throw new HttpError(400,'Укажите от 2 до 6 корректных моментов UTC.');
+ }
+ const slots=[...value].sort((a,b)=>a-b);
+ if(new Set(slots).size!==slots.length)throw new HttpError(400,'Моменты встречи должны различаться.');
+ return slots;
+}
+/** Validate only on first creation; an idempotent replay survives expired slots. */
+export function validateMeetingSlots(slots,expiresAt,now){
+ if(expiresAt===null||expiresAt>=slots[0]||slots.some(ms=>ms<=now||ms-now>MAX_DEADLINE_SPAN)){
+  throw new HttpError(400,'Дедлайн выбора должен быть раньше первой встречи; слоты — в пределах 365 дней.');
+ }
+}
+export function meetingFingerprint(title,slots,expiresAt,hideResultsUntilClose=false){
+ return createHash('sha256').update(JSON.stringify(['meeting:v1',title,slots,expiresAt,!!hideResultsUntilClose])).digest('hex');
+}

@@ -103,3 +103,11 @@ The creation form now offers **Hide results until closing** (opt-in) and **Multi
 Pending creation intents use version 2 and pin the request UUID, deadline, visibility and choice mode. Legacy saved intents are read with defaults; a replay cannot silently change settings. The server preserves legacy single-choice creation hashes and votes, and stores multi-choice ballots separately. Hidden polls return no aggregate or ballot total to any visitor until closure. This does not hide any results already exposed before closing.
 
 **Deployment:** Back up the SQLite WAL set and original session key together. Deploy backend and generated frontend from the same tested commit, then check real HTTP behavior. GitHub Pages only publishes static assets, not the Node.js backend. A rollback of only the server binary is not safe once new-mode polls have been written. See [OPERATIONS.md](OPERATIONS.md).
+
+### Schedule a meeting — typed UTC slots
+
+Choose **Schedule a meeting** in the creation form to propose 2–6 distinct UTC instants. A voting deadline **before the first meeting time** is required; all slots must be in the future and within 365 days. The form previews local times for your browser. Guests and the organizer can see the same slot instants while their displayed local times depend on their timezone.
+
+Meeting polls have `mode:'meeting'`, numeric `slots` (UTC milliseconds), and a separate `poll_meeting_slots` table — never date strings hidden inside ordinary poll choices. Voting sends `{id,slot:index}`. Only one slot can be selected per browser session. The result includes `slots`, `choice` and `counts`; the earlier single/multiple modes and creation hashes are unchanged. The create form never silently copies another meeting's dates.
+
+**Known limits:** these are fixed proposals, not calendar bookings, invitation delivery, capacity management or verified attendance. A participant with a new browser session may vote again. Google/GitHub Pages publishes only static assets; the separate Node backend needs a matching rollout. See [OPERATIONS.md](OPERATIONS.md).

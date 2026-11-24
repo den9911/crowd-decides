@@ -557,3 +557,11 @@ Cookies и черновики|Cookies and drafts
 Отметьте хотя бы один вариант.|Select at least one option.
 Опрос уже закрыт. Нажмите «Обновить».|The poll is closed. Select Refresh.
 Результат голоса не подтверждён. Нажмите «Обновить», не повторяя отправку.|Vote unconfirmed. Select Refresh without resubmitting.
+
+Время встречи (UTC, по одному на строку)|Meeting times (UTC, one per line)
+От 2 до 6 разных дат UTC в течение 365 дней. Дедлайн голосования обязателен и должен быть раньше первой встречи.|Enter 2 to 6 distinct UTC times within 365 days. A voting deadline before the first meeting is required.
+Выбрать дату встречи|Schedule a meeting
+Введите время встречи в UTC.|Enter meeting times in UTC.
+Укажите корректные даты UTC.|Enter valid UTC dates.
+Местное время: |Local time: 
+Укажите 2–6 разных будущих слотов UTC и дедлайн голосования раньше первой встречи.|Enter 2–6 distinct future UTC slots and set the voting deadline before the first meeting.
