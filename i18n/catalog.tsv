@@ -580,3 +580,14 @@ Cookies и черновики|Cookies and drafts
 Черновик сохранён в этом браузере. Публикация не выполнялась.|Draft saved in this browser. Nothing was published.
 Черновик восстановлен. Проверьте поля перед публикацией.|Draft restored. Check the fields before publishing.
 Локальный черновик удалён. Форма и запрос публикации не изменились.|Local draft deleted. The form and publication request were not changed.
+
+До публикации варианты можно менять. После публикации они фиксируются, чтобы прежние голоса не меняли значение. Для нового набора вариантов создатель сможет сделать отдельный опрос.|Options can be edited before publication. After publication they are fixed so existing votes keep their meaning. The creator can make a separate poll for different options.
+Опрос закрыт. Опубликованные варианты и голоса остаются неизменными.|This poll is closed. Published options and votes remain unchanged.
+Варианты опубликованы и зафиксированы: изменение текста изменило бы смысл уже отданных голосов.|Published options are locked: changing their text would change the meaning of existing votes.
+«Создать похожий» откроет отдельный редактируемый опрос. Голоса, дата закрытия и владение не копируются.|Create a similar poll opens a separate editable poll. Votes, closing date and ownership are not copied.
+Для встречи можно создать новый опрос: даты и голоса автоматически не переносятся.|To schedule another meeting, create a new poll. Meeting times and votes are not transferred automatically.
+Только создатель может скопировать варианты. Вы можете создать собственный новый опрос.|Only the creator can copy options. You can create your own new poll.
+Почему нельзя редактировать опубликованные варианты?|Why can't published options be edited?
+В этом браузере остался сохранённый черновик. Публикация не удаляет его автоматически.|A saved draft remains in this browser. Publishing does not delete it automatically.
+Удалить сохранённый черновик|Delete saved draft
+Локальный черновик удалён. Опубликованный опрос и голоса не изменились.|The local draft was deleted. The published poll and votes were not changed.

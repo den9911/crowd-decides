@@ -1,6 +1,6 @@
 import { $, $$, api, escape, action, share, storage } from '/locales/en/shared/ui.js';
 import {decodePending,parseUtcMinute,pollCreationPayload,meetingInput} from './intent.js';
-import {readDraft,saveDraft,clearDraft} from './draft.js';
+import {readDraft,saveDraft,clearDraft,draftKey} from './draft.js';
 const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function localDeadline(value){
@@ -22,14 +22,14 @@ export async function mount(){
     try{template=await boundedApi(`/api/poll/template?id=${encodeURIComponent(templateId)}`);}
     catch(error){
       if(error.code==='OWNER_SESSION_REQUIRED'){
-        try{await showPoll(templateId);feedback('This session cannot manage the poll. Open it in the creator’s original browser.');return;}catch{}
+        try{await showPoll(templateId);feedback('This session cannot manage the poll. Open it in the creator’s original browser.');$('.poll-title')?.focus({preventScroll:true});return;}catch{}
       }
       $('#app').innerHTML='<section class="narrow panel stack"><p role="status">The template could not be loaded. No new poll was created. Check the link and original session, then retry loading.</p><button id="retry-template">Retry loading the template</button><a class="text-button" href="/decide/">Create your own</a></section>';
       action($('#retry-template'),()=>mount());return;
     }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
-  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>What are we deciding?</h2>${template?'<p class="note">This is a new draft. Votes and closing settings are not copied.</p>':''}<label>Question<input name="title" maxlength="160" required placeholder="What should we name our cat?"></label><label id="poll-options-group">Options — one per line<textarea name="options" maxlength="485" rows="6" required placeholder="Donut&#10;Pixel&#10;Sir Loaf"></textarea></label><p id="poll-options-help" class="small muted">2 to 6 options, up to 80 characters each.</p><label id="meeting-slots-group" hidden>Meeting times (UTC, one per line)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>Enter 2 to 6 distinct UTC times within 365 days. A voting deadline before the first meeting is required.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Deadline (UTC, optional)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Leave blank for no deadline. Enter a UTC date and time up to 365 days ahead.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Voting type</legend><label><input type="radio" name="mode" value="single" checked> One option</label><label><input type="radio" name="mode" value="multiple"> Multiple options</label><label><input type="radio" name="mode" value="meeting"> Schedule a meeting</label><p id="poll-mode-help" class="small muted">For multiple-choice polls, participants select one or more answers. The type cannot change after publication.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Hide results until closing</label><p class="small muted">While voting is open, neither the creator nor voters can see aggregate results. After closing, everyone with the link can see them.</p><div class="row"><button type="submit">Create poll ↗</button><button id="save-poll-draft" class="secondary" type="button">Save draft</button><button id="restore-poll-draft" class="secondary" type="button">Restore draft</button><button id="delete-poll-draft" class="secondary" type="button">Delete draft</button></div><p id="poll-draft-status" class="small muted" role="status" aria-live="polite">Drafts are stored only in this browser. They are never published automatically.</p></form><div class="stack"><div class="panel stack"><h2>One question. One link.</h2><p class="muted">Create a poll and send it to your chat. Friends can vote without signing up, and everyone sees the result.</p><p class="small muted">Anyone with the link can access the poll. Do not add confidential information.</p></div>${recent.length?`<div class="panel stack"><h3>Your recent polls</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">This list stays in your browser. A recent link does not prove ownership.</p></div>`:''}</div></div>`;
+  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>What are we deciding?</h2>${template?'<p class="note">This is a new draft. Votes and closing settings are not copied.</p>':''}<label>Question<input name="title" maxlength="160" required placeholder="What should we name our cat?"></label><label id="poll-options-group">Options — one per line<textarea name="options" maxlength="485" rows="6" required placeholder="Donut&#10;Pixel&#10;Sir Loaf"></textarea></label><p id="poll-options-help" class="small muted">2 to 6 options, up to 80 characters each.</p><label id="meeting-slots-group" hidden>Meeting times (UTC, one per line)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>Enter 2 to 6 distinct UTC times within 365 days. A voting deadline before the first meeting is required.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Deadline (UTC, optional)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Leave blank for no deadline. Enter a UTC date and time up to 365 days ahead.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Voting type</legend><label><input type="radio" name="mode" value="single" checked> One option</label><label><input type="radio" name="mode" value="multiple"> Multiple options</label><label><input type="radio" name="mode" value="meeting"> Schedule a meeting</label><p id="poll-mode-help" class="small muted">For multiple-choice polls, participants select one or more answers. The type cannot change after publication.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Hide results until closing</label><p class="small muted">While voting is open, neither the creator nor voters can see aggregate results. After closing, everyone with the link can see them.</p><p id="before-publish-help" class="small muted">Options can be edited before publication. After publication they are fixed so existing votes keep their meaning. The creator can make a separate poll for different options.</p><div class="row" id="poll-draft-actions"><button type="submit">Create poll ↗</button><button id="save-poll-draft" class="secondary" type="button">Save draft</button><button id="restore-poll-draft" class="secondary" type="button">Restore draft</button><button id="delete-poll-draft" class="secondary" type="button">Delete draft</button></div><p id="poll-draft-status" class="small muted" role="status" aria-live="polite">Drafts are stored only in this browser. They are never published automatically.</p></form><div class="stack"><div class="panel stack"><h2>One question. One link.</h2><p class="muted">Create a poll and send it to your chat. Friends can vote without signing up, and everyone sees the result.</p><p class="small muted">Anyone with the link can access the poll. Do not add confidential information.</p></div>${recent.length?`<div class="panel stack"><h3>Your recent polls</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">This list stays in your browser. A recent link does not prove ownership.</p></div>`:''}</div></div>`;
   const form=$('#create-poll'),deadline=form.elements.deadline,preview=$('#poll-deadline-preview');
   const hiddenControl=form.elements.hideResultsUntilClose;
   const modeControls=Array.from(form.querySelectorAll('input[name="mode"]'));
@@ -66,9 +66,15 @@ export async function mount(){
       mode:form.querySelector('input[name="mode"]:checked').value};
   }
   function draftControls(message=''){
-    draftSave.disabled=!!pending||pendingInvalid||draftUnreadable;
-    draftRestore.disabled=!!pending||pendingInvalid||!savedDraft;
-    draftDelete.disabled=!!pending||pendingInvalid||(!savedDraft&&!draftUnreadable);
+    for(const [control,disabled] of [
+      [draftSave,!!pending||pendingInvalid||draftUnreadable],
+      [draftRestore,!!pending||pendingInvalid||!savedDraft],
+      [draftDelete,!!pending||pendingInvalid||(!savedDraft&&!draftUnreadable)]
+    ]){
+      control.disabled=disabled;
+      // action() otherwise re-enables its trigger even after it becomes unavailable.
+      control.dataset.lock=disabled?'true':'false';
+    }
     draftStatus.textContent=message||(
       pending||pendingInvalid?'Publication is unconfirmed. A draft cannot replace the original request.':
       draftUnreadable?'The saved draft is damaged or inaccessible. Delete it separately; the publication request is unaffected.':
@@ -129,6 +135,7 @@ export async function mount(){
   }
   meetingInputs();
   draftControls();
+  if(template&&!pending&&!pendingInvalid)form.elements.title.focus({preventScroll:true});
   action(draftSave,()=>{
     if(pending||pendingInvalid||draftUnreadable)return;
     savedDraft=saveDraft(localStorage,draftFields());
@@ -136,7 +143,9 @@ export async function mount(){
   });
   action(draftRestore,()=>{
     if(pending||pendingInvalid)return;
-    const draft=readDraft(localStorage);
+    let draft;
+    try{draft=readDraft(localStorage);}
+    catch(error){draftUnreadable=true;savedDraft=null;draftControls();throw error;}
     if(!draft){savedDraft=null;draftControls();return;}
     savedDraft=draft;
     applyDraft(draft);
@@ -148,6 +157,7 @@ export async function mount(){
     clearDraft(localStorage);
     savedDraft=null;draftUnreadable=false;
     draftControls('Local draft deleted. The form and publication request were not changed.');
+    draftSave.focus({preventScroll:true});
   });
   action(form,async()=>{
     if(pendingInvalid)return;
@@ -206,8 +216,27 @@ async function showPoll(id,trigger){
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
     ?`<p class="small muted">Deadline: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
   const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
-  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'POLL CLOSED':'A DECISION IS IN THE MAKING'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<aside id="ownership-notice" class="note" aria-label="Creator access">${poll.isOwner?'You manage this poll through this browser session. Keep its site data.':'You can view this poll; only the creator can manage it.'}<details><summary>How do I keep creator access?</summary><p>To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.</p></details></aside><div class="row"><button id="share">Send to friends ↗</button><button id="refresh" class="secondary">Refresh</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Close poll</button>':''}${poll.isOwner&&!meeting?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">Create a similar poll</a>`:''}<a class="text-button" href="/decide/">Create your own</a></div></div>`;
+  const canCopy=poll.isOwner&&!meeting;
+  const immutabilityNotice=poll.closed?
+    'This poll is closed. Published options and votes remain unchanged.':
+    'Published options are locked: changing their text would change the meaning of existing votes.';
+  const creationNotice=canCopy?
+    'Create a similar poll opens a separate editable poll. Votes, closing date and ownership are not copied.':
+    poll.isOwner?
+      'To schedule another meeting, create a new poll. Meeting times and votes are not transferred automatically.':
+      'Only the creator can copy options. You can create your own new poll.';
+  let hasSavedDraft=false;
+  if(poll.isOwner){try{hasSavedDraft=localStorage.getItem(draftKey)!==null;}catch{}}
+  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'POLL CLOSED':'A DECISION IS IN THE MAKING'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<section id="published-edit-policy" class="stack" aria-labelledby="published-edit-heading"><h3 id="published-edit-heading">Why can\u0027t published options be edited?</h3><p id="published-edit-help" class="small muted">${immutabilityNotice}</p><p id="published-copy-help" class="small muted">${creationNotice}</p></section><aside id="ownership-notice" class="note" aria-label="Creator access">${poll.isOwner?'You manage this poll through this browser session. Keep its site data.':'You can view this poll; only the creator can manage it.'}<details><summary>How do I keep creator access?</summary><p>To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.</p></details></aside><div class="row"><button id="share">Send to friends ↗</button><button id="refresh" class="secondary">Refresh</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Close poll</button>':''}${canCopy?`<a id="copy-poll" class="text-button" href="?copy=${encodeURIComponent(id)}" aria-describedby="published-edit-help published-copy-help">Create a similar poll</a>`:''}<a class="text-button" href="/decide/">Create your own</a></div>${hasSavedDraft?'<div id="published-draft-actions" class="stack"><p class="small muted">A saved draft remains in this browser. Publishing does not delete it automatically.</p><button id="clear-published-draft" class="secondary" type="button">Delete saved draft</button><p id="published-draft-status" class="small" role="status" tabindex="-1"></p></div>':''}</div>`;
   if(restoreFocus)$('.poll-title').focus({preventScroll:true});
+  const publishedDraftClear=$('#clear-published-draft');
+  if(publishedDraftClear)action(publishedDraftClear,()=>{
+    clearDraft(localStorage);
+    const status=$('#published-draft-status');
+    status.textContent='The local draft was deleted. The published poll and votes were not changed.';
+    status.focus({preventScroll:true});
+    publishedDraftClear.remove();
+  });
   $$('.poll-option').forEach(button=>action(button,async()=>{
     // One pending choice: do not offer a competing vote while its result is unknown.
     $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});

@@ -1,6 +1,6 @@
 import { $, $$, api, escape, action, share, storage } from '/shared/ui.js';
 import {decodePending,parseUtcMinute,pollCreationPayload,meetingInput} from './intent.js';
-import {readDraft,saveDraft,clearDraft} from './draft.js';
+import {readDraft,saveDraft,clearDraft,draftKey} from './draft.js';
 const pendingKey='minute:pending-poll';
 const boundedApi=(path,input)=>api(path,input,{}, {signal:AbortSignal.timeout(10000)});
 function localDeadline(value){
@@ -22,14 +22,14 @@ export async function mount(){
     try{template=await boundedApi(`/api/poll/template?id=${encodeURIComponent(templateId)}`);}
     catch(error){
       if(error.code==='OWNER_SESSION_REQUIRED'){
-        try{await showPoll(templateId);feedback('Управление недоступно в этой сессии. Откройте опрос в исходном браузере создателя.');return;}catch{}
+        try{await showPoll(templateId);feedback('Управление недоступно в этой сессии. Откройте опрос в исходном браузере создателя.');$('.poll-title')?.focus({preventScroll:true});return;}catch{}
       }
       $('#app').innerHTML='<section class="narrow panel stack"><p role="status">Шаблон не загружен. Новый опрос не создан. Проверьте ссылку и исходную сессию, затем повторите загрузку.</p><button id="retry-template">Повторить загрузку шаблона</button><a class="text-button" href="/decide/">Создать свой</a></section>';
       action($('#retry-template'),()=>mount());return;
     }
   }
   const saved=storage.get('my-polls',[]),recent=Array.isArray(saved)?saved:[];
-  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label id="poll-options-group">Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p id="poll-options-help" class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label id="meeting-slots-group" hidden>Время встречи (UTC, по одному на строку)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>От 2 до 6 разных дат UTC в течение 365 дней. Дедлайн голосования обязателен и должен быть раньше первой встречи.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Тип голосования</legend><label><input type="radio" name="mode" value="single" checked> Один вариант</label><label><input type="radio" name="mode" value="multiple"> Несколько вариантов</label><label><input type="radio" name="mode" value="meeting"> Выбрать дату встречи</label><p id="poll-mode-help" class="small muted">При выборе нескольких вариантов участник отмечает один или больше ответов. Изменить тип после публикации нельзя.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Скрывать результаты до закрытия</label><p class="small muted">Пока голосование открыто, ни создатель, ни участники не увидят общий счёт. После закрытия результаты станут доступны всем по ссылке.</p><div class="row"><button type="submit">Создать голосование ↗</button><button id="save-poll-draft" class="secondary" type="button">Сохранить черновик</button><button id="restore-poll-draft" class="secondary" type="button">Восстановить черновик</button><button id="delete-poll-draft" class="secondary" type="button">Удалить черновик</button></div><p id="poll-draft-status" class="small muted" role="status" aria-live="polite">Черновик сохраняется только в этом браузере. Он не публикуется автоматически.</p></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
+  $('#app').innerHTML=`<div class="split"><form id="create-poll" class="panel stack"><h2>Что решаем?</h2>${template?'<p class="note">Это новый черновик. Голоса и настройки завершения исходного опроса не переносятся.</p>':''}<label>Вопрос<input name="title" maxlength="160" required placeholder="Как назовём нашего кота?"></label><label id="poll-options-group">Варианты — каждый с новой строки<textarea name="options" maxlength="485" rows="6" required placeholder="Пончик&#10;Пиксель&#10;Граф Батон"></textarea></label><p id="poll-options-help" class="small muted">От 2 до 6 вариантов, до 80 символов каждый.</p><label id="meeting-slots-group" hidden>Время встречи (UTC, по одному на строку)<textarea name="slots" rows="5" placeholder="2026-12-15T18:30&#10;2026-12-16T18:30" aria-describedby="meeting-slots-help meeting-slots-preview"></textarea></label><p id="meeting-slots-help" class="small muted" hidden>От 2 до 6 разных дат UTC в течение 365 дней. Дедлайн голосования обязателен и должен быть раньше первой встречи.</p><p id="meeting-slots-preview" class="small" role="status" hidden></p><label for="poll-deadline">Дедлайн (UTC, необязательно)</label><input id="poll-deadline" name="deadline" type="datetime-local" aria-describedby="poll-deadline-help poll-deadline-preview"><p id="poll-deadline-help" class="small muted">Пустое поле означает опрос без срока. Укажите дату и время в UTC, не позднее чем через 365 дней.</p><p id="poll-deadline-preview" class="small" role="status"></p><fieldset class="stack" aria-describedby="poll-mode-help"><legend>Тип голосования</legend><label><input type="radio" name="mode" value="single" checked> Один вариант</label><label><input type="radio" name="mode" value="multiple"> Несколько вариантов</label><label><input type="radio" name="mode" value="meeting"> Выбрать дату встречи</label><p id="poll-mode-help" class="small muted">При выборе нескольких вариантов участник отмечает один или больше ответов. Изменить тип после публикации нельзя.</p></fieldset><label><input type="checkbox" name="hideResultsUntilClose"> Скрывать результаты до закрытия</label><p class="small muted">Пока голосование открыто, ни создатель, ни участники не увидят общий счёт. После закрытия результаты станут доступны всем по ссылке.</p><p id="before-publish-help" class="small muted">До публикации варианты можно менять. После публикации они фиксируются, чтобы прежние голоса не меняли значение. Для нового набора вариантов создатель сможет сделать отдельный опрос.</p><div class="row" id="poll-draft-actions"><button type="submit">Создать голосование ↗</button><button id="save-poll-draft" class="secondary" type="button">Сохранить черновик</button><button id="restore-poll-draft" class="secondary" type="button">Восстановить черновик</button><button id="delete-poll-draft" class="secondary" type="button">Удалить черновик</button></div><p id="poll-draft-status" class="small muted" role="status" aria-live="polite">Черновик сохраняется только в этом браузере. Он не публикуется автоматически.</p></form><div class="stack"><div class="panel stack"><h2>Один вопрос. Одна ссылка.</h2><p class="muted">Создай опрос и отправь его в чат. Друзья смогут ответить без регистрации, а ты — увидеть общий результат.</p><p class="small muted">Опрос доступен каждому, у кого есть ссылка. Не добавляй конфиденциальные сведения.</p></div>${recent.length?`<div class="panel stack"><h3>Твои недавние опросы</h3>${recent.slice(0,8).map(p=>`<a href="?poll=${escape(p.id)}">${escape(p.title)}</a>`).join('')}<p class="small muted">Этот список хранится только в твоём браузере. Ссылка в списке не подтверждает владение.</p></div>`:''}</div></div>`;
   const form=$('#create-poll'),deadline=form.elements.deadline,preview=$('#poll-deadline-preview');
   const hiddenControl=form.elements.hideResultsUntilClose;
   const modeControls=Array.from(form.querySelectorAll('input[name="mode"]'));
@@ -66,9 +66,15 @@ export async function mount(){
       mode:form.querySelector('input[name="mode"]:checked').value};
   }
   function draftControls(message=''){
-    draftSave.disabled=!!pending||pendingInvalid||draftUnreadable;
-    draftRestore.disabled=!!pending||pendingInvalid||!savedDraft;
-    draftDelete.disabled=!!pending||pendingInvalid||(!savedDraft&&!draftUnreadable);
+    for(const [control,disabled] of [
+      [draftSave,!!pending||pendingInvalid||draftUnreadable],
+      [draftRestore,!!pending||pendingInvalid||!savedDraft],
+      [draftDelete,!!pending||pendingInvalid||(!savedDraft&&!draftUnreadable)]
+    ]){
+      control.disabled=disabled;
+      // action() otherwise re-enables its trigger even after it becomes unavailable.
+      control.dataset.lock=disabled?'true':'false';
+    }
     draftStatus.textContent=message||(
       pending||pendingInvalid?'Публикация ещё не подтверждена. Черновик не может заменить исходный запрос.':
       draftUnreadable?'Сохранённый черновик повреждён или недоступен. Удалите его отдельно; запрос публикации не затронут.':
@@ -129,6 +135,7 @@ export async function mount(){
   }
   meetingInputs();
   draftControls();
+  if(template&&!pending&&!pendingInvalid)form.elements.title.focus({preventScroll:true});
   action(draftSave,()=>{
     if(pending||pendingInvalid||draftUnreadable)return;
     savedDraft=saveDraft(localStorage,draftFields());
@@ -136,7 +143,9 @@ export async function mount(){
   });
   action(draftRestore,()=>{
     if(pending||pendingInvalid)return;
-    const draft=readDraft(localStorage);
+    let draft;
+    try{draft=readDraft(localStorage);}
+    catch(error){draftUnreadable=true;savedDraft=null;draftControls();throw error;}
     if(!draft){savedDraft=null;draftControls();return;}
     savedDraft=draft;
     applyDraft(draft);
@@ -148,6 +157,7 @@ export async function mount(){
     clearDraft(localStorage);
     savedDraft=null;draftUnreadable=false;
     draftControls('Локальный черновик удалён. Форма и запрос публикации не изменились.');
+    draftSave.focus({preventScroll:true});
   });
   action(form,async()=>{
     if(pendingInvalid)return;
@@ -206,8 +216,27 @@ async function showPoll(id,trigger){
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
     ?`<p class="small muted">Дедлайн: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
   const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
-  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'ОПРОС ЗАВЕРШЁН':'РЕШЕНИЕ ПРИНИМАЕТСЯ'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<aside id="ownership-notice" class="note" aria-label="Доступ создателя">${poll.isOwner?'Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.':'Вы просматриваете опрос. Управлять им может только создатель.'}<details><summary>Как сохранить доступ создателя?</summary><p>Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.</p></details></aside><div class="row"><button id="share">Отправить друзьям ↗</button><button id="refresh" class="secondary">Обновить</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Завершить опрос</button>':''}${poll.isOwner&&!meeting?`<a class="text-button" href="?copy=${encodeURIComponent(id)}">Создать похожий</a>`:''}<a class="text-button" href="/decide/">Создать свой</a></div></div>`;
+  const canCopy=poll.isOwner&&!meeting;
+  const immutabilityNotice=poll.closed?
+    'Опрос закрыт. Опубликованные варианты и голоса остаются неизменными.':
+    'Варианты опубликованы и зафиксированы: изменение текста изменило бы смысл уже отданных голосов.';
+  const creationNotice=canCopy?
+    '«Создать похожий» откроет отдельный редактируемый опрос. Голоса, дата закрытия и владение не копируются.':
+    poll.isOwner?
+      'Для встречи можно создать новый опрос: даты и голоса автоматически не переносятся.':
+      'Только создатель может скопировать варианты. Вы можете создать собственный новый опрос.';
+  let hasSavedDraft=false;
+  if(poll.isOwner){try{hasSavedDraft=localStorage.getItem(draftKey)!==null;}catch{}}
+  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'ОПРОС ЗАВЕРШЁН':'РЕШЕНИЕ ПРИНИМАЕТСЯ'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<section id="published-edit-policy" class="stack" aria-labelledby="published-edit-heading"><h3 id="published-edit-heading">Почему нельзя редактировать опубликованные варианты?</h3><p id="published-edit-help" class="small muted">${immutabilityNotice}</p><p id="published-copy-help" class="small muted">${creationNotice}</p></section><aside id="ownership-notice" class="note" aria-label="Доступ создателя">${poll.isOwner?'Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.':'Вы просматриваете опрос. Управлять им может только создатель.'}<details><summary>Как сохранить доступ создателя?</summary><p>Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.</p></details></aside><div class="row"><button id="share">Отправить друзьям ↗</button><button id="refresh" class="secondary">Обновить</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Завершить опрос</button>':''}${canCopy?`<a id="copy-poll" class="text-button" href="?copy=${encodeURIComponent(id)}" aria-describedby="published-edit-help published-copy-help">Создать похожий</a>`:''}<a class="text-button" href="/decide/">Создать свой</a></div>${hasSavedDraft?'<div id="published-draft-actions" class="stack"><p class="small muted">В этом браузере остался сохранённый черновик. Публикация не удаляет его автоматически.</p><button id="clear-published-draft" class="secondary" type="button">Удалить сохранённый черновик</button><p id="published-draft-status" class="small" role="status" tabindex="-1"></p></div>':''}</div>`;
   if(restoreFocus)$('.poll-title').focus({preventScroll:true});
+  const publishedDraftClear=$('#clear-published-draft');
+  if(publishedDraftClear)action(publishedDraftClear,()=>{
+    clearDraft(localStorage);
+    const status=$('#published-draft-status');
+    status.textContent='Локальный черновик удалён. Опубликованный опрос и голоса не изменились.';
+    status.focus({preventScroll:true});
+    publishedDraftClear.remove();
+  });
   $$('.poll-option').forEach(button=>action(button,async()=>{
     // One pending choice: do not offer a competing vote while its result is unknown.
     $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});

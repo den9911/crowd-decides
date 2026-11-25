@@ -21,3 +21,13 @@
   @media(max-width:420px){.app-grid{grid-template-columns:1fr}.card-top{min-height:70px}.card-symbol{width:58px;height:58px}.finds-grid{grid-template-columns:1fr}.leader-grid{grid-template-columns:1fr}.home-intro h1{font-size:3.8rem}.hero-symbol{display:none}}
   @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 }
+
+/* Poll publication is immutable. Keep lengthy copy, UTC instants and action labels usable at 320px/zoom. */
+#published-edit-policy{border-block-start:1px solid var(--line);padding-block-start:16px;min-width:0}
+#published-edit-policy p,#published-draft-actions p,#poll-draft-status,#before-publish-help{overflow-wrap:anywhere}
+#published-draft-actions{min-width:0}
+#poll-draft-actions>*{min-width:0;white-space:normal;text-align:center}
+.poll-option{white-space:normal;text-align:start;overflow-wrap:anywhere;min-width:0}
+.result-line .row>*{min-width:0;overflow-wrap:anywhere}
+#published-edit-policy a:focus-visible,#poll-draft-actions button:focus-visible,#clear-published-draft:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+@media(max-width:420px){#poll-draft-actions{display:grid;grid-template-columns:1fr}#poll-draft-actions button{width:100%}}

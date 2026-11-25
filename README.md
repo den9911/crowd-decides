@@ -118,3 +118,12 @@ Meeting polls have `mode:'meeting'`, numeric `slots` (UTC milliseconds), and a s
 Use **Save draft** before publishing to keep your title, options, UTC meeting slots, deadline, poll mode and result visibility in **this browser's localStorage only**. Reloading does not publish anything; choose **Restore draft** to load it back into the form. The owner-only **Create similar** link takes precedence when opened and never silently replaces a saved draft. **Delete draft** clears only the local draft; it leaves the current form and any pending publication intact.
 
 Drafts expire after 30 days and contain no request UUID, owner secret or vote data. Missing storage permission, exceeded quota, unsupported versions or corrupted drafts fail safely; delete a damaged draft deliberately rather than overwriting it. The separate sessionStorage pending creation receipt is immutable after an uncertain response and cannot be replaced by a draft. Nothing is synchronized across devices. On successful publication, remove any obsolete saved draft manually.
+
+
+### Published options are immutable; drafts are optional
+
+Once a poll is published, its question and options are fixed: changing their meaning after votes have been cast would corrupt the results. The poll page now explains this rule for open and closed polls. Only the creator's current browser session can choose **Create a similar poll** (for ordinary single/multiple polls). It starts a **new** editable poll and never transfers votes, request IDs, deadline, closing state or creator privileges. A meeting poll uses **Create your own** instead of copying existing meeting slots. Viewers without the original creator cookie cannot copy or edit the published poll.
+
+A locally saved draft remains available after publishing. The published poll page offers the creator an explicit **Delete saved draft** action. Deletion removes only the browser-local draft, never the published poll, options, counts or session key. The Save/Restore/Delete buttons preserve their disabled states and keyboard focus after deletion or corrupt-storage recovery. Draft data is not synchronized to other browsers and is never an automatic POST.
+
+The application regression suite verifies these boundaries in real Chromium (EN/RU, keyboard, long text, 320 CSS px, zoom, reduced motion and System/Light/Dark), plus Node tests for malformed drafts and quota denial. GitHub Pages is static; availability of the separate production Node.js backend is not established by Pages CI.
