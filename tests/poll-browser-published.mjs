@@ -74,6 +74,10 @@ test('published options remain immutable; only owner can create a separate edita
    await page.goto(base+'/decide/?poll='+id);
    await page.locator('#published-edit-policy').waitFor();
    assert.equal(await page.locator('#copy-poll').count(),1,'closed owner can still copy to a new poll');
+   assert.equal(await page.locator('#poll-closed-notice').isVisible(),true);
+   assert.equal(await page.locator('.poll-option,#multi-vote').count(),0);
+   const closedGuest=await browser.newContext({viewport:{width:320,height:780},locale:language==='en'?'en-US':'ru-RU'});
+   try{const guest=await closedGuest.newPage();await guest.goto(base+'/decide/?poll='+id);await guest.locator('#poll-closed-notice').waitFor();assert.equal(await guest.locator('.poll-option,#multi-vote,#copy-poll,#close').count(),0);await guest.locator('#refresh').focus();await guest.keyboard.press('Enter');await guest.locator('#poll-closed-notice').waitFor();assert.equal(await guest.evaluate(()=>document.activeElement?.classList.contains('poll-title')),true);await guest.route('**/api/poll?id=*',route=>route.abort());await guest.locator('#refresh').click();await guest.locator('#retry-poll').waitFor();assert.equal(await guest.locator('.poll-option,#multi-vote').count(),0);await guest.unroute('**/api/poll?id=*');await guest.locator('#retry-poll').click();await guest.locator('#poll-closed-notice').waitFor();}finally{await closedGuest.close();}
    assert.deepEqual((await (await context.request.get(base+'/api/poll?id='+id)).json()).counts,[{choice:'0',count:1}]);
    assert.deepEqual(errors,[]);
   }finally{await context.close();}

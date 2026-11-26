@@ -15,7 +15,7 @@ function feedback(message){
 }
 export async function mount(){
   const id=new URLSearchParams(location.search).get('poll');
-  if(id){await showPoll(id);return;}
+  if(id){await loadPoll(id);return;}
   const templateId=new URLSearchParams(location.search).get('copy');
   let template=null;
   if(templateId){
@@ -196,6 +196,12 @@ export async function mount(){
     try{sessionStorage.removeItem(pendingKey);}catch{}storage.set('my-polls',[{id:result.id,title:pending.title},...recent.filter(p=>p.id!==result.id)].slice(0,20));location.href=`?poll=${result.id}`;
   },'submit');
 }
+async function loadPoll(id,trigger){
+  const restore=!!trigger&&(document.activeElement===trigger||document.activeElement===document.body||trigger.contains(document.activeElement));
+  $('#app').innerHTML='<section class="narrow panel stack" aria-busy="true"><p role="status">Загрузка опроса…</p></section>';
+  try{await showPoll(id,restore?document.body:null);}
+  catch{ $('#app').innerHTML='<section class="narrow panel stack"><p role="alert">Не удалось обновить опрос. Повторите загрузку.</p><button id="retry-poll">Повторить загрузку</button></section>';const retry=$('#retry-poll');action(retry,()=>loadPoll(id,retry));if(restore)retry.focus(); }
+}
 async function showPoll(id,trigger){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const resultsVisible=poll.resultsVisible!==false&&Array.isArray(poll.counts);
@@ -215,7 +221,7 @@ async function showPoll(id,trigger){
   const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Результаты откроются после завершения опроса.</p>${poll.choice!==null?`<p>Твой ответ учтён. ${selected.map(i=>escape(options[i])).join(', ')}</p>`:''}</div>`;
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
     ?`<p class="small muted">Дедлайн: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
-  const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
+  const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body||trigger.contains(document.activeElement));
   const canCopy=poll.isOwner&&!meeting;
   const immutabilityNotice=poll.closed?
     'Опрос закрыт. Опубликованные варианты и голоса остаются неизменными.':
@@ -227,7 +233,7 @@ async function showPoll(id,trigger){
       'Только создатель может скопировать варианты. Вы можете создать собственный новый опрос.';
   let hasSavedDraft=false;
   if(poll.isOwner){try{hasSavedDraft=localStorage.getItem(draftKey)!==null;}catch{}}
-  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'ОПРОС ЗАВЕРШЁН':'РЕШЕНИЕ ПРИНИМАЕТСЯ'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<section id="published-edit-policy" class="stack" aria-labelledby="published-edit-heading"><h3 id="published-edit-heading">Почему нельзя редактировать опубликованные варианты?</h3><p id="published-edit-help" class="small muted">${immutabilityNotice}</p><p id="published-copy-help" class="small muted">${creationNotice}</p></section><aside id="ownership-notice" class="note" aria-label="Доступ создателя">${poll.isOwner?'Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.':'Вы просматриваете опрос. Управлять им может только создатель.'}<details><summary>Как сохранить доступ создателя?</summary><p>Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.</p></details></aside><div class="row"><button id="share">Отправить друзьям ↗</button><button id="refresh" class="secondary">Обновить</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Завершить опрос</button>':''}${canCopy?`<a id="copy-poll" class="text-button" href="?copy=${encodeURIComponent(id)}" aria-describedby="published-edit-help published-copy-help">Создать похожий</a>`:''}<a class="text-button" href="/decide/">Создать свой</a></div>${hasSavedDraft?'<div id="published-draft-actions" class="stack"><p class="small muted">В этом браузере остался сохранённый черновик. Публикация не удаляет его автоматически.</p><button id="clear-published-draft" class="secondary" type="button">Удалить сохранённый черновик</button><p id="published-draft-status" class="small" role="status" tabindex="-1"></p></div>':''}</div>`;
+  $('#app').innerHTML=`<div class="narrow panel stack" id="published-poll"><p class="eyebrow">${poll.closed?'ОПРОС ЗАВЕРШЁН':'РЕШЕНИЕ ПРИНИМАЕТСЯ'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${poll.closed?'<section class="note poll-closed-notice" id="poll-closed-notice"><p>Голосование недоступно. Посмотрите итог или создайте новый опрос.</p></section>':''}${choices}${results}${hidden}<section id="published-edit-policy" class="stack" aria-labelledby="published-edit-heading"><h3 id="published-edit-heading">Почему нельзя редактировать опубликованные варианты?</h3><p id="published-edit-help" class="small muted">${immutabilityNotice}</p><p id="published-copy-help" class="small muted">${creationNotice}</p></section><aside id="ownership-notice" class="note" aria-label="Доступ создателя">${poll.isOwner?'Вы управляете этим опросом через текущую сессию браузера. Сохраните данные сайта.':'Вы просматриваете опрос. Управлять им может только создатель.'}<details><summary>Как сохранить доступ создателя?</summary><p>Для управления откройте опрос в исходном браузере и профиле создателя. После удаления cookie или завершения приватного просмотра эта сессия теряется. Ссылка и список недавних опросов не восстанавливают права. Автоматического восстановления нет. Можно участвовать в открытом опросе или создать свой.</p></details></aside><div class="row"><button id="share">Отправить друзьям ↗</button><button id="refresh" class="secondary">Обновить</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Завершить опрос</button>':''}${canCopy?`<a id="copy-poll" class="text-button" href="?copy=${encodeURIComponent(id)}" aria-describedby="published-edit-help published-copy-help">Создать похожий</a>`:''}<a class="text-button" href="/decide/">Создать свой</a></div>${hasSavedDraft?'<div id="published-draft-actions" class="stack"><p class="small muted">В этом браузере остался сохранённый черновик. Публикация не удаляет его автоматически.</p><button id="clear-published-draft" class="secondary" type="button">Удалить сохранённый черновик</button><p id="published-draft-status" class="small" role="status" tabindex="-1"></p></div>':''}</div>`;
   if(restoreFocus)$('.poll-title').focus({preventScroll:true});
   const publishedDraftClear=$('#clear-published-draft');
   if(publishedDraftClear)action(publishedDraftClear,()=>{
@@ -260,7 +266,7 @@ async function showPoll(id,trigger){
       catch{feedback(error.code==='POLL_CLOSED'?'Опрос уже закрыт. Нажмите «Обновить».':'Результат голоса не подтверждён. Нажмите «Обновить», не повторяя отправку.');}
     }
   },'submit');
-  action($('#share'),()=>share(location.href,'Решайте',poll.title));const refresh=$('#refresh');action(refresh,()=>showPoll(id,refresh));
+  action($('#share'),()=>share(location.href,'Решайте',poll.title));const refresh=$('#refresh');action(refresh,()=>loadPoll(id,refresh));
   const close=$('#close');
   if(close)action(close,async()=>{
     try{await boundedApi('/api/poll/close',{id});await showPoll(id,close);}

@@ -591,3 +591,7 @@ Cookies и черновики|Cookies and drafts
 В этом браузере остался сохранённый черновик. Публикация не удаляет его автоматически.|A saved draft remains in this browser. Publishing does not delete it automatically.
 Удалить сохранённый черновик|Delete saved draft
 Локальный черновик удалён. Опубликованный опрос и голоса не изменились.|The local draft was deleted. The published poll and votes were not changed.
+Голосование недоступно. Посмотрите итог или создайте новый опрос.|Voting is unavailable. View the results or create a new poll.
+Не удалось обновить опрос. Повторите загрузку.|Could not refresh the poll. Try loading it again.
+Загрузка опроса…|Loading poll…
+Повторить загрузку|Retry loading

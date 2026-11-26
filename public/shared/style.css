@@ -31,3 +31,9 @@
 .result-line .row>*{min-width:0;overflow-wrap:anywhere}
 #published-edit-policy a:focus-visible,#poll-draft-actions button:focus-visible,#clear-published-draft:focus-visible{outline:3px solid currentColor;outline-offset:3px}
 @media(max-width:420px){#poll-draft-actions{display:grid;grid-template-columns:1fr}#poll-draft-actions button{width:100%}}
+
+#published-poll,#published-edit-policy,.poll-closed-notice{min-width:0;overflow-wrap:anywhere}
+#published-edit-policy{background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:clamp(10px,3vw,18px);gap:10px}
+.poll-closed-notice{border:1px solid var(--input-line);padding:12px;color:var(--ink)}
+#published-poll .poll-title:focus{outline:2px solid var(--focus);outline-offset:4px}
+#published-poll .row>*{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}

@@ -15,7 +15,7 @@ function feedback(message){
 }
 export async function mount(){
   const id=new URLSearchParams(location.search).get('poll');
-  if(id){await showPoll(id);return;}
+  if(id){await loadPoll(id);return;}
   const templateId=new URLSearchParams(location.search).get('copy');
   let template=null;
   if(templateId){
@@ -196,6 +196,12 @@ export async function mount(){
     try{sessionStorage.removeItem(pendingKey);}catch{}storage.set('my-polls',[{id:result.id,title:pending.title},...recent.filter(p=>p.id!==result.id)].slice(0,20));location.href=`?poll=${result.id}`;
   },'submit');
 }
+async function loadPoll(id,trigger){
+  const restore=!!trigger&&(document.activeElement===trigger||document.activeElement===document.body||trigger.contains(document.activeElement));
+  $('#app').innerHTML='<section class="narrow panel stack" aria-busy="true"><p role="status">Loading poll…</p></section>';
+  try{await showPoll(id,restore?document.body:null);}
+  catch{ $('#app').innerHTML='<section class="narrow panel stack"><p role="alert">Could not refresh the poll. Try loading it again.</p><button id="retry-poll">Retry loading</button></section>';const retry=$('#retry-poll');action(retry,()=>loadPoll(id,retry));if(restore)retry.focus(); }
+}
 async function showPoll(id,trigger){
   const poll=await boundedApi(`/api/poll?id=${encodeURIComponent(id)}`);
   const resultsVisible=poll.resultsVisible!==false&&Array.isArray(poll.counts);
@@ -215,7 +221,7 @@ async function showPoll(id,trigger){
   const hidden=resultsVisible?'':`<div class="note" id="poll-results-hidden"><p>Results will be shown when the poll closes.</p>${poll.choice!==null?`<p>Your vote is counted. ${selected.map(i=>escape(options[i])).join(', ')}</p>`:''}</div>`;
   const deadline=Number.isSafeInteger(poll.expiresAt)&&poll.expiresAt>0&&poll.expiresAt<=8_640_000_000_000_000
     ?`<p class="small muted">Deadline: <time id="poll-deadline-value" datetime="${new Date(poll.expiresAt).toISOString()}">${escape(localDeadline(poll.expiresAt))}</time></p>`:'';
-  const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body);
+  const restoreFocus=trigger&&(document.activeElement===trigger||document.activeElement===document.body||trigger.contains(document.activeElement));
   const canCopy=poll.isOwner&&!meeting;
   const immutabilityNotice=poll.closed?
     'This poll is closed. Published options and votes remain unchanged.':
@@ -227,7 +233,7 @@ async function showPoll(id,trigger){
       'Only the creator can copy options. You can create your own new poll.';
   let hasSavedDraft=false;
   if(poll.isOwner){try{hasSavedDraft=localStorage.getItem(draftKey)!==null;}catch{}}
-  $('#app').innerHTML=`<div class="narrow panel stack"><p class="eyebrow">${poll.closed?'POLL CLOSED':'A DECISION IS IN THE MAKING'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${choices}${results}${hidden}<section id="published-edit-policy" class="stack" aria-labelledby="published-edit-heading"><h3 id="published-edit-heading">Why can\u0027t published options be edited?</h3><p id="published-edit-help" class="small muted">${immutabilityNotice}</p><p id="published-copy-help" class="small muted">${creationNotice}</p></section><aside id="ownership-notice" class="note" aria-label="Creator access">${poll.isOwner?'You manage this poll through this browser session. Keep its site data.':'You can view this poll; only the creator can manage it.'}<details><summary>How do I keep creator access?</summary><p>To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.</p></details></aside><div class="row"><button id="share">Send to friends ↗</button><button id="refresh" class="secondary">Refresh</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Close poll</button>':''}${canCopy?`<a id="copy-poll" class="text-button" href="?copy=${encodeURIComponent(id)}" aria-describedby="published-edit-help published-copy-help">Create a similar poll</a>`:''}<a class="text-button" href="/decide/">Create your own</a></div>${hasSavedDraft?'<div id="published-draft-actions" class="stack"><p class="small muted">A saved draft remains in this browser. Publishing does not delete it automatically.</p><button id="clear-published-draft" class="secondary" type="button">Delete saved draft</button><p id="published-draft-status" class="small" role="status" tabindex="-1"></p></div>':''}</div>`;
+  $('#app').innerHTML=`<div class="narrow panel stack" id="published-poll"><p class="eyebrow">${poll.closed?'POLL CLOSED':'A DECISION IS IN THE MAKING'}</p><h2 class="poll-title" tabindex="-1">${escape(poll.title)}</h2>${deadline}${poll.closed?'<section class="note poll-closed-notice" id="poll-closed-notice"><p>Voting is unavailable. View the results or create a new poll.</p></section>':''}${choices}${results}${hidden}<section id="published-edit-policy" class="stack" aria-labelledby="published-edit-heading"><h3 id="published-edit-heading">Why can\u0027t published options be edited?</h3><p id="published-edit-help" class="small muted">${immutabilityNotice}</p><p id="published-copy-help" class="small muted">${creationNotice}</p></section><aside id="ownership-notice" class="note" aria-label="Creator access">${poll.isOwner?'You manage this poll through this browser session. Keep its site data.':'You can view this poll; only the creator can manage it.'}<details><summary>How do I keep creator access?</summary><p>To manage the poll, open it in the creator’s original browser and profile. Clearing cookies or ending private browsing loses that session. The link and recent polls list cannot restore permission. Automatic recovery is unavailable. You can vote in an open poll or create your own.</p></details></aside><div class="row"><button id="share">Send to friends ↗</button><button id="refresh" class="secondary">Refresh</button>${poll.isOwner&&!poll.closed?'<button id="close" class="secondary">Close poll</button>':''}${canCopy?`<a id="copy-poll" class="text-button" href="?copy=${encodeURIComponent(id)}" aria-describedby="published-edit-help published-copy-help">Create a similar poll</a>`:''}<a class="text-button" href="/decide/">Create your own</a></div>${hasSavedDraft?'<div id="published-draft-actions" class="stack"><p class="small muted">A saved draft remains in this browser. Publishing does not delete it automatically.</p><button id="clear-published-draft" class="secondary" type="button">Delete saved draft</button><p id="published-draft-status" class="small" role="status" tabindex="-1"></p></div>':''}</div>`;
   if(restoreFocus)$('.poll-title').focus({preventScroll:true});
   const publishedDraftClear=$('#clear-published-draft');
   if(publishedDraftClear)action(publishedDraftClear,()=>{
@@ -260,7 +266,7 @@ async function showPoll(id,trigger){
       catch{feedback(error.code==='POLL_CLOSED'?'The poll is closed. Select Refresh.':'Vote unconfirmed. Select Refresh without resubmitting.');}
     }
   },'submit');
-  action($('#share'),()=>share(location.href,'Crowd Decides',poll.title));const refresh=$('#refresh');action(refresh,()=>showPoll(id,refresh));
+  action($('#share'),()=>share(location.href,'Crowd Decides',poll.title));const refresh=$('#refresh');action(refresh,()=>loadPoll(id,refresh));
   const close=$('#close');
   if(close)action(close,async()=>{
     try{await boundedApi('/api/poll/close',{id});await showPoll(id,close);}
