@@ -92,8 +92,15 @@ test('meeting date UI publishes typed UTC slots, renders local time and protects
    assert.equal(voted.choice,'1');assert.equal(voted.counts,null);
    assert.equal(app.db.prepare('SELECT COUNT(*) n FROM poll_meeting_votes WHERE poll_id=?').get(id).n,1);
    assert.equal(app.db.prepare('SELECT COUNT(*) n FROM polls WHERE request_id=?').get(intent.requestId).n,1);
-   await page.locator('#close').click();
+   assert.equal(await page.locator('#copy-poll').count(),0,'meeting owner cannot copy slots');
+   await page.locator('#close').focus();await page.keyboard.press('Enter');
    await page.locator('.result-line').first().waitFor();
+   assert.equal(await page.locator('#poll-closed-notice').isVisible(),true);
+   assert.equal(await page.evaluate(()=>document.activeElement?.classList.contains('poll-title')),true);
+   assert.equal(await page.locator('#copy-poll').count(),0);
+   await page.setViewportSize({width:640,height:1200});
+   await page.evaluate(()=>{document.documentElement.style.zoom='2';});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),true,'closed meeting 200% zoom');
    const finished=await(await context.request.get(origin+'/api/poll?id='+id)).json();
    assert.equal(finished.resultsVisible,true);assert.deepEqual(finished.counts,[{choice:'1',count:1}]);
    assert.equal(await page.locator('.poll-option').count(),0);

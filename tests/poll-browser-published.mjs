@@ -18,7 +18,7 @@ test('published options remain immutable; only owner can create a separate edita
   try{
    await context.addInitScript(({language,theme})=>localStorage.setItem('minute:preferences',JSON.stringify({language,theme})),{language,theme});
    const title='A very long published question '+language+' '+theme+' about choosing together and not modifying already collected votes';
-   const options=['First extremely long option with several words and details for narrow screens',
+   const options=['Опрос завершён. — пользовательский вариант без перевода '+language,
                   'Second option describing a long alternative without changing old votes'];
    const created=await context.request.post(base+'/api/polls',{data:{title,options}});
    assert.equal(created.status(),201);
@@ -30,6 +30,14 @@ test('published options remain immutable; only owner can create a separate edita
    await page.goto(base+'/decide/?poll='+id);
    await page.locator('#published-edit-policy').waitFor();
    assert.equal(await page.locator('html').getAttribute('lang'),language);
+   assert.equal(await page.locator('html').getAttribute('data-theme'),theme==='system'?'dark':theme);
+   const scroll=await page.evaluate(()=>({width:getComputedStyle(document.documentElement).scrollbarWidth,color:getComputedStyle(document.documentElement).scrollbarColor}));
+   assert.equal(scroll.width,'thin');assert.notEqual(scroll.color,'auto');
+   for(const value of ['light','dark','system']){
+    await page.locator('[data-preference="theme"][data-value="'+value+'"]').click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'),value==='system'?'dark':value);
+    assert.equal(await page.locator('#copy-poll').isVisible(),true);
+   }
    assert.equal(await page.locator('#copy-poll').count(),1);
    assert.ok((await page.locator('#published-edit-help').innerText()).length>20);
    assert.ok((await page.locator('#published-copy-help').innerText()).length>20);
@@ -75,9 +83,15 @@ test('published options remain immutable; only owner can create a separate edita
    await page.locator('#published-edit-policy').waitFor();
    assert.equal(await page.locator('#copy-poll').count(),1,'closed owner can still copy to a new poll');
    assert.equal(await page.locator('#poll-closed-notice').isVisible(),true);
+   await page.setViewportSize({width:640,height:1200});
+   await page.evaluate(()=>{document.documentElement.style.zoom='2';});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),true,'200% zoom at 640px');
+   assert.match(await page.locator('.result-line').first().innerText(),/Опрос завершён/);
+   await page.evaluate(()=>{document.documentElement.style.zoom='1';});
+   await page.setViewportSize({width:320,height:780});
    assert.equal(await page.locator('.poll-option,#multi-vote').count(),0);
    const closedGuest=await browser.newContext({viewport:{width:320,height:780},locale:language==='en'?'en-US':'ru-RU'});
-   try{const guest=await closedGuest.newPage();await guest.goto(base+'/decide/?poll='+id);await guest.locator('#poll-closed-notice').waitFor();assert.equal(await guest.locator('.poll-option,#multi-vote,#copy-poll,#close').count(),0);await guest.locator('#refresh').focus();await guest.keyboard.press('Enter');await guest.locator('#poll-closed-notice').waitFor();assert.equal(await guest.evaluate(()=>document.activeElement?.classList.contains('poll-title')),true);await guest.route('**/api/poll?id=*',route=>route.abort());await guest.locator('#refresh').click();await guest.locator('#retry-poll').waitFor();assert.equal(await guest.locator('.poll-option,#multi-vote').count(),0);await guest.unroute('**/api/poll?id=*');await guest.locator('#retry-poll').click();await guest.locator('#poll-closed-notice').waitFor();}finally{await closedGuest.close();}
+   try{await closedGuest.addInitScript(()=>{Object.defineProperty(window,'localStorage',{get(){throw new DOMException('denied','SecurityError');}});});const guest=await closedGuest.newPage();await guest.goto(base+'/decide/?poll='+id);await guest.locator('#poll-closed-notice').waitFor();assert.equal(await guest.locator('.poll-option,#multi-vote,#copy-poll,#close').count(),0);await guest.locator('#refresh').focus();await guest.keyboard.press('Enter');await guest.locator('#poll-closed-notice').waitFor();assert.equal(await guest.evaluate(()=>document.activeElement?.classList.contains('poll-title')),true);await guest.route('**/api/poll?id=*',route=>route.abort());await guest.locator('#refresh').click();await guest.locator('#retry-poll').waitFor();assert.equal(await guest.locator('.poll-option,#multi-vote').count(),0);await guest.unroute('**/api/poll?id=*');await guest.locator('#retry-poll').click();await guest.locator('#poll-closed-notice').waitFor();}finally{await closedGuest.close();}
    assert.deepEqual((await (await context.request.get(base+'/api/poll?id='+id)).json()).counts,[{choice:'0',count:1}]);
    assert.deepEqual(errors,[]);
   }finally{await context.close();}

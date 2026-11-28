@@ -68,11 +68,15 @@ test('backup and restore preserve both old single and new multi votes and origin
  h.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
  await h.stop();
  const backup=await mkdtemp(join(tmpdir(),'multi-restore-'));
- t.after(()=>rm(backup,{recursive:true,force:true}));
+ let restoredServer;
+ t.after(async()=>{
+  if(restoredServer?.listening)await new Promise((resolve,reject)=>restoredServer.close(error=>error?reject(error):resolve()));
+  await rm(backup,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+ });
  await copyFile(join(h.dataDir,'minute.sqlite'),join(backup,'minute.sqlite'));
  await copyFile(join(h.dataDir,'session-key'),join(backup,'session-key'));
  const app=await createApp({dataDir:backup,disableRateLimit:true});
- t.after(async()=>{await new Promise(resolve=>app.server.close(resolve));});
+ restoredServer=app.server;
  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
  const origin='http://127.0.0.1:'+app.server.address().port;
  const read=async(id,cookie)=>await(await fetch(origin+'/api/poll?id='+id,{headers:cookie?{cookie}:{}})).json();

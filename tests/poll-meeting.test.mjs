@@ -112,11 +112,15 @@ test('an interrupted meeting vote rolls back, and stopped SQLite/key backup rest
  h.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
  await h.stop();
  const backupDir=await mkdtemp(join(tmpdir(),'meeting-restore-'));
- t.after(()=>rm(backupDir,{recursive:true,force:true}));
+ let restoredServer;
+ t.after(async()=>{
+  if(restoredServer?.listening)await new Promise((resolve,reject)=>restoredServer.close(error=>error?reject(error):resolve()));
+  await rm(backupDir,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+ });
  await copyFile(join(h.dataDir,'minute.sqlite'),join(backupDir,'minute.sqlite'));
  await copyFile(join(h.dataDir,'session-key'),join(backupDir,'session-key'));
  const restored=await createApp({dataDir:backupDir,disableRateLimit:true,pollNow:()=>BASE});
- t.after(async()=>{await new Promise(resolve=>restored.server.close(resolve));});
+ restoredServer=restored.server;
  await new Promise(resolve=>restored.server.listen(0,'127.0.0.1',resolve));
  const response=await fetch('http://127.0.0.1:'+restored.server.address().port+'/api/poll?id='+id);
  const view=await response.json();

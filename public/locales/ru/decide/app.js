@@ -243,42 +243,49 @@ async function showPoll(id,trigger){
     status.focus({preventScroll:true});
     publishedDraftClear.remove();
   });
-  $$('.poll-option').forEach(button=>action(button,async()=>{
+  function lockPublishedActions(){
+    for(const control of $('#refresh,#close,.poll-option,#multi-vote input,#multi-vote button')){
+      control.disabled=true;control.dataset.lock='true';
+    }
+  }
+  function allowReconciliation(){const button=$('#refresh');if(button){delete button.dataset.lock;button.disabled=false;}}
+  $('.poll-option').forEach(button=>action(button,async()=>{
     // One pending choice: do not offer a competing vote while its result is unknown.
-    $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});
+    lockPublishedActions();
     try{await boundedApi('/api/poll/vote',meeting?{id,slot:Number(button.dataset.index)}:{id,choice:Number(button.dataset.index)});await showPoll(id,button);}
     catch(error){
       try{
         await showPoll(id,button);
         feedback(error.code==='POLL_CLOSED'?'Опрос уже закрыт. Состояние перечитано с сервера.':error.code==='POLL_ALREADY_VOTED'?'Ваш голос уже учтён. Показан сохранённый ответ.':'Состояние голоса перечитано с сервера. Проверьте свой ответ и результат.');
       }
-      catch{feedback(error.code==='POLL_CLOSED'?'Сервер подтвердил закрытие. Нажмите «Обновить», чтобы загрузить итог.':'Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
+      catch{allowReconciliation();feedback(error.code==='POLL_CLOSED'?'Сервер подтвердил закрытие. Нажмите «Обновить», чтобы загрузить итог.':'Результат голоса не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
     }
   }));
   const multiForm=$('#multi-vote');
   if(multiForm)action(multiForm,async()=>{
     const checked=Array.from(multiForm.querySelectorAll('input[name="choices"]:checked')).map(input=>Number(input.value));
     if(!checked.length){feedback('Отметьте хотя бы один вариант.');multiForm.querySelector('input')?.focus();return;}
-    multiForm.querySelectorAll('input,button').forEach(input=>{input.disabled=true;});
+    lockPublishedActions();
     try{await boundedApi('/api/poll/vote',{id,choices:checked});await showPoll(id,multiForm);}
     catch(error){
       try{await showPoll(id,multiForm);feedback('Состояние голоса перечитано с сервера. Проверьте свой ответ и результат.');}
-      catch{feedback(error.code==='POLL_CLOSED'?'Опрос уже закрыт. Нажмите «Обновить».':'Результат голоса не подтверждён. Нажмите «Обновить», не повторяя отправку.');}
+      catch{allowReconciliation();feedback(error.code==='POLL_CLOSED'?'Опрос уже закрыт. Нажмите «Обновить».':'Результат голоса не подтверждён. Нажмите «Обновить», не повторяя отправку.');}
     }
   },'submit');
   action($('#share'),()=>share(location.href,'Решайте',poll.title));const refresh=$('#refresh');action(refresh,()=>loadPoll(id,refresh));
   const close=$('#close');
   if(close)action(close,async()=>{
+    lockPublishedActions();
     try{await boundedApi('/api/poll/close',{id});await showPoll(id,close);}
     catch(error){
       // A missing response is not proof of failure. Reconcile with GET; never replay POST automatically.
       $('#close')?.remove();
       if(error.code==='OWNER_SESSION_REQUIRED'){
-        try{await showPoll(id,close);}catch{}
+        try{await showPoll(id,close);}catch{allowReconciliation();}
         feedback('Управление недоступно в этой сессии. Откройте опрос в исходном браузере создателя.');return;
       }
       try{await showPoll(id,close);feedback('Состояние перечитано с сервера. Проверьте, завершён ли опрос.');}
-      catch{feedback('Результат завершения не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
+      catch{allowReconciliation();feedback('Результат завершения не подтверждён. Нажмите «Обновить», чтобы проверить состояние. Повторная отправка не выполняется.');}
 
     }
   });

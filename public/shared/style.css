@@ -37,3 +37,11 @@
 .poll-closed-notice{border:1px solid var(--input-line);padding:12px;color:var(--ink)}
 #published-poll .poll-title:focus{outline:2px solid var(--focus);outline-offset:4px}
 #published-poll .row>*{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+
+/* Published state: protect narrow result rows and the policy block at text zoom. */
+#published-poll .result-line{min-width:0;grid-template-columns:minmax(0,1fr)}
+#published-poll .result-line .row{align-items:baseline}
+#published-poll .result-line .row span{flex:1 1 8rem;min-width:0;overflow-wrap:anywhere}
+#published-poll .result-line .row strong{flex:0 1 auto;min-width:0;overflow-wrap:anywhere}
+#published-poll #poll-deadline-value{overflow-wrap:anywhere}
+#published-poll #published-edit-heading{overflow-wrap:anywhere}

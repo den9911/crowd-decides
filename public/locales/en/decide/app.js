@@ -243,42 +243,49 @@ async function showPoll(id,trigger){
     status.focus({preventScroll:true});
     publishedDraftClear.remove();
   });
-  $$('.poll-option').forEach(button=>action(button,async()=>{
+  function lockPublishedActions(){
+    for(const control of $('#refresh,#close,.poll-option,#multi-vote input,#multi-vote button')){
+      control.disabled=true;control.dataset.lock='true';
+    }
+  }
+  function allowReconciliation(){const button=$('#refresh');if(button){delete button.dataset.lock;button.disabled=false;}}
+  $('.poll-option').forEach(button=>action(button,async()=>{
     // One pending choice: do not offer a competing vote while its result is unknown.
-    $$('.poll-option').forEach(option=>{option.disabled=true;option.dataset.lock='true';});
+    lockPublishedActions();
     try{await boundedApi('/api/poll/vote',meeting?{id,slot:Number(button.dataset.index)}:{id,choice:Number(button.dataset.index)});await showPoll(id,button);}
     catch(error){
       try{
         await showPoll(id,button);
         feedback(error.code==='POLL_CLOSED'?'The poll is already closed. Its status has been refreshed from the server.':error.code==='POLL_ALREADY_VOTED'?'Your vote was already counted. The saved answer is shown.':'The server vote state was refreshed. Check your answer and the result.');
       }
-      catch{feedback(error.code==='POLL_CLOSED'?'The server confirmed closure. Use Refresh to load the result.':'Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.');}
+      catch{allowReconciliation();feedback(error.code==='POLL_CLOSED'?'The server confirmed closure. Use Refresh to load the result.':'Your vote is unconfirmed. Use Refresh to check its state. The request is not sent again automatically.');}
     }
   }));
   const multiForm=$('#multi-vote');
   if(multiForm)action(multiForm,async()=>{
     const checked=Array.from(multiForm.querySelectorAll('input[name="choices"]:checked')).map(input=>Number(input.value));
     if(!checked.length){feedback('Select at least one option.');multiForm.querySelector('input')?.focus();return;}
-    multiForm.querySelectorAll('input,button').forEach(input=>{input.disabled=true;});
+    lockPublishedActions();
     try{await boundedApi('/api/poll/vote',{id,choices:checked});await showPoll(id,multiForm);}
     catch(error){
       try{await showPoll(id,multiForm);feedback('The server vote state was refreshed. Check your answer and the result.');}
-      catch{feedback(error.code==='POLL_CLOSED'?'The poll is closed. Select Refresh.':'Vote unconfirmed. Select Refresh without resubmitting.');}
+      catch{allowReconciliation();feedback(error.code==='POLL_CLOSED'?'The poll is closed. Select Refresh.':'Vote unconfirmed. Select Refresh without resubmitting.');}
     }
   },'submit');
   action($('#share'),()=>share(location.href,'Crowd Decides',poll.title));const refresh=$('#refresh');action(refresh,()=>loadPoll(id,refresh));
   const close=$('#close');
   if(close)action(close,async()=>{
+    lockPublishedActions();
     try{await boundedApi('/api/poll/close',{id});await showPoll(id,close);}
     catch(error){
       // A missing response is not proof of failure. Reconcile with GET; never replay POST automatically.
       $('#close')?.remove();
       if(error.code==='OWNER_SESSION_REQUIRED'){
-        try{await showPoll(id,close);}catch{}
+        try{await showPoll(id,close);}catch{allowReconciliation();}
         feedback('This session cannot manage the poll. Open it in the creator’s original browser.');return;
       }
       try{await showPoll(id,close);feedback('The server state was refreshed. Check whether the poll is closed.');}
-      catch{feedback('Closing is unconfirmed. Use Refresh to check the state. The request is not sent again automatically.');}
+      catch{allowReconciliation();feedback('Closing is unconfirmed. Use Refresh to check the state. The request is not sent again automatically.');}
 
     }
   });
